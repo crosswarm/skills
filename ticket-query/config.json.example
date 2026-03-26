@@ -1,0 +1,7 @@
+{
+  "jira_base_url": "https://your-jira.example.com",
+  "username": "your_username",
+  "password_enc": "(运行 --setup 自动生成，机器专属加密，不可跨机器复制)",
+  "ssl_verify": true,
+  "default_project": "LCZX"
+}
