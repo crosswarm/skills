@@ -200,6 +200,7 @@ field >= "2026-01-01"            field < "2026-04-01"
 | SOP产品版本 | `cf[13529]` | customfield_13529 | |
 | 领域模块 | `cf[10123]` | customfield_10123 | |
 | 冲刺标签 | `cf[15200]` | customfield_15200 | |
+| **支持人员信息** | `cf[11907]` | customfield_11907 | 工单的支持人员账号+手机+邮件；用 `cf[11907] ~ "username"` 过滤 |
 | 联系人 | `cf[10404]` | customfield_10404 | |
 | 联系方式 | `cf[10405]` | customfield_10405 | |
 | **初始领域** | `cf[13308]` | customfield_13308 | 用于查转出工单 |

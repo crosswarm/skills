@@ -50,6 +50,7 @@ FIELDS = (
     "customfield_10401,"   # 需求负责人
     "customfield_15200,"   # 冲刺标签
     "customfield_10123,"   # 领域模块
+    "customfield_11907,"   # 支持人员信息
     "resolutiondate"       # 解决日期
 )
 
