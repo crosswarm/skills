@@ -1,0 +1,8 @@
+{
+  "name": "aiticket-reply",
+  "version": "1.0.0",
+  "description": "AITicket 智能分析与回复 — 独立 skill 版，支持模块感知回复、知识库问答、相似工单搜索",
+  "author": "产品管理与应用架构总体部 强骁",
+  "license": "AGPL-3.0",
+  "keywords": ["aiticket", "smart-reply", "qcl", "claude-skill", "intelligent-reply"]
+}
