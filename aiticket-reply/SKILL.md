@@ -4,11 +4,12 @@ description: |
   AITicket 智能分析与回复 — 给定工单号或自由提问，自动生成智能回复内容、
   推荐知识库文章、推荐相关工单、推荐处理团队和回复方式。
   支持模块感知回复（指定模块时走 /api/reply/generate-by-module）。
+  支持智能扩展模式（"完善方案"）：基于用户修订内容重跑搜索给出精准方案。
   基于向量语义搜索 + 知识库 + 回复训练器的多源融合智能回复。
   触发词: "智能回复"、"分析工单"、"回复建议"、"帮我回复"、"这个工单怎么处理"、
-  "回复工单"、"生成回复"、"知识库问答"、"相似工单"
+  "回复工单"、"生成回复"、"知识库问答"、"相似工单"、"完善方案"、"深化方案"
 author: 产品管理与应用架构总体部 强骁
-version: 1.0.0
+version: 1.1.0
 date: 2026-05
 ---
 
@@ -50,27 +51,63 @@ date: 2026-05
 
 ## 前置准备
 
-获取后端地址：
+### 1. 获取后端地址
+
 ```bash
 BASE_URL=$(python3 .agent/skills/aiticket-reply/scripts/setup_config.py --get-url)
 ```
 
-如果返回 `NEED_SETUP`，引导用户运行：
+如果返回 `NEED_SETUP`，说明尚未配置，告知用户需要初始化（管理员通过 `--setup` 完成，用户无需关心）。
+
+### 2. 获取认证信息
+
 ```bash
-python3 .agent/skills/aiticket-reply/scripts/setup_config.py --setup
+# 一次性读取所有认证 Header（Token 行 + Client-Id 行）
+HEADERS_RAW=$(python3 .agent/skills/aiticket-reply/scripts/setup_config.py --get-auth-headers)
+# 转换为 curl -H 参数（每行一个 Header）
+CURL_AUTH=$(echo "$HEADERS_RAW" | awk '{print "-H \""$0"\""}' | tr '\n' ' ')
 ```
 
-所有 API 为公开接口，无需认证，直接 curl 调用。
+登录状态静默检测：
+```bash
+LOGIN_STATUS=$(python3 .agent/skills/aiticket-reply/scripts/setup_config.py --whoami)
+```
+- 返回以 `已登录:` 开头 → 已认证，不计配额，直接进入模式判断
+- 返回 `未登录` → **不要让用户手动跑脚本**，直接用自然语言问用户：
+  「您还没有登录 QCL 账号，请告诉我您的用户名和密码，我来帮您完成登录」
+  用户回复后 Claude 在后台执行：
+  ```bash
+  python3 .agent/skills/aiticket-reply/scripts/setup_config.py --login <<EOF
+  <用户名>
+  <密码>
+  EOF
+  ```
+  登录成功后重新获取 `HEADERS_RAW`，继续正常流程。
+- 未登录且用户不愿意登录 → 提示「未登录每天可免费使用 1 次，今日额度尚未用完时继续」，进入匿名流程
+
+### 3. 所有 curl 调用格式
+
+认证 Header 从 `$HEADERS_RAW` 逐行注入，模板：
+```bash
+curl -s -X POST "$BASE_URL/api/reply/generate-by-module" \
+  $(echo "$HEADERS_RAW" | awk '{print "-H \""$0"\""}') \
+  -H "Content-Type: application/json" \
+  -d '{"issue_key":"LCZX-61234","module":"流程中心","force":false}'
+```
 
 **URL 编码提示**: 中文查询参数必须 URL 编码：
 ```bash
-# 方法1: python3 编码
-Q=$(python3 -c "import urllib.parse; print(urllib.parse.quote('中文查询'))")
-curl -s "$BASE_URL/api/board/search?q=$Q&top_k=5"
-
-# 方法2: curl --data-urlencode 配合 -G
-curl -s -G "$BASE_URL/api/board/search" --data-urlencode "q=中文查询" -d "top_k=5"
+# curl --data-urlencode 配合 -G（推荐）
+curl -s -G "$BASE_URL/api/board/search" \
+  $(echo "$HEADERS_RAW" | awk '{print "-H \""$0"\""}') \
+  --data-urlencode "q=中文查询" -d "top_k=5"
 ```
+
+### 4. 额度用尽的统一处理
+
+当任何接口返回 HTTP 429 时，**不要让用户看到技术性错误信息**，直接以自然语言说：
+「您今天的免费额度已经用完了（每天 1 次），请告诉我您的 QCL 用户名和密码，登录后即可无限制使用。」
+用户提供账号后，Claude 后台执行 `--login`，登录成功后立即重跑刚才失败的请求。
 
 ---
 
@@ -284,6 +321,55 @@ curl -s -G "$BASE_URL/api/board/search" --data-urlencode "q=搜索关键词" -d 
 
 ---
 
+## 模式 D: 智能扩展（完善方案）
+
+**触发词**: `完善方案` / `深化方案` / `按这个思路再想想` / `refine`
+
+**触发条件**: 当前对话中已有一个最近的 issue_key，且用户对 Claude 上一轮给出的回复进行了手工修改或补充关键词。
+
+### 步骤 1: 提取上下文
+
+从用户最新输入中提取：
+- `USER_DRAFT`：用户修改后的方案内容（或补充说明文本）
+- `FOCUS_KEYWORDS`：从 USER_DRAFT 中切词，取 2-8 个实意词（2 字以上）
+
+如用户仅说「完善方案」而未给出具体内容，先询问：「请告诉我您想着重完善的方向或关键词，比如「字段联动」「事件触发」等」
+
+### 步骤 2: 调用 refine 端点
+
+```bash
+curl -s -X POST "$BASE_URL/api/reply/refine" \
+  $(echo "$HEADERS_RAW" | awk '{print "-H \""$0"\""}') \
+  -H "Content-Type: application/json" \
+  -d "$(python3 -c "
+import json, sys
+draft = '''$USER_DRAFT'''
+keywords = [w for w in draft.replace('，',',').replace('、',',').replace('；',',').split(',') if len(w.strip())>=2][:8]
+print(json.dumps({'issue_key':'$ISSUE_KEY','user_draft':draft,'focus_keywords':keywords}))
+")"
+```
+
+**返回字段**:
+| 字段 | 说明 |
+|------|------|
+| `refined_solution` | 服务端 LLM 基于新搜索结果生成的参考方案 |
+| `kb_sources` | 本次搜索命中的知识库文章列表 |
+| `similar_issues` | 本次搜索命中的相似工单列表 |
+| `search_keywords_used` | 实际用于搜索的关键词 |
+| `module_used` | 实际使用的模块分类 |
+
+### 步骤 3: Claude 重写最终回复
+
+⚠️ `refined_solution` 是服务端 LLM 参考输出，**不得直接给用户**。
+
+Claude 本体基于以下材料重写最终回复（格式同模式 A 阶段三，标题改为「方案完善」）：
+- `refined_solution`（解决思路参考）
+- `similar_issues`（历史工单参考）
+- `kb_sources`（知识库依据）
+- 用户提供的 `USER_DRAFT`（用户意图核心）
+
+---
+
 ## 演示流程
 
 当用户要求演示或体验时，执行以下流程：
@@ -310,5 +396,8 @@ curl -s -G "$BASE_URL/api/board/search" --data-urlencode "q=搜索关键词" -d 
 ## 严格限制
 
 1. **所有数据通过 API 获取** — 不直接读取本地数据库
-2. **不暴露配置内容** — 不在输出中显示 BASE_URL 或加密配置的内容
-3. **异常处理** — API 返回错误时，提示用户检查后端服务或工单号是否正确
+2. **不暴露配置内容** — 不在输出中显示 BASE_URL、Token 或任何加密配置内容
+3. **异常处理** — API 返回错误时，以友好语言提示用户，不暴露技术细节
+4. **用户友好引导** — 登录、额度提示、错误提示全部用自然语言；**禁止让用户自己跑任何命令行脚本**，Claude 代劳所有脚本调用
+5. **429 必须转化为登录引导** — 永远不直接向用户输出「HTTP 429」或「额度超限」原始错误，统一转化为友好的登录引导
+6. **refined_solution 不直接输出** — 与 reply_content 一样，服务端生成的方案文本只作为 Claude 推理材料，最终回复由 Claude 本体撰写

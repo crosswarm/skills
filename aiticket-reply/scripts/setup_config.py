@@ -4,10 +4,14 @@ AITicket Reply Skill — 配置向导
 产品管理与应用架构总体部 强骁, 2026
 
 用法:
-  python3 setup_config.py --setup          # 交互式配置（Fernet 机器绑定加密）
-  python3 setup_config.py --test           # 测试连接（验证最新 API 端点）
-  python3 setup_config.py --get-url        # 输出后端 URL（供 curl 使用）
-  python3 setup_config.py --rotate-key     # 机器迁移时重新加密
+  python3 setup_config.py --setup              # 交互式配置（Fernet 机器绑定加密）
+  python3 setup_config.py --login              # 登录 QCL 账号并存储 device token
+  python3 setup_config.py --whoami             # 验证当前登录状态
+  python3 setup_config.py --logout             # 注销 device token
+  python3 setup_config.py --test               # 测试连接（验证最新 API 端点）
+  python3 setup_config.py --get-url            # 输出后端 URL（供 curl 使用）
+  python3 setup_config.py --get-auth-headers   # 输出认证 Header（供 curl 使用）
+  python3 setup_config.py --rotate-key         # 机器迁移时重新加密
 """
 import argparse
 import base64
@@ -41,6 +45,12 @@ def _machine_key() -> bytes:
     machine_id = f"{socket.gethostname()}:{os.path.expanduser('~')}"
     raw = hashlib.pbkdf2_hmac("sha256", machine_id.encode(), _SALT, 100_000)
     return base64.urlsafe_b64encode(raw)
+
+
+def _machine_fingerprint() -> str:
+    """生成机器指纹用于 device token 绑定（与密钥派生材料一致）。"""
+    machine_id = f"{socket.gethostname()}:{os.path.expanduser('~')}"
+    return hashlib.sha256((machine_id + "aiticket-fp-v1").encode()).hexdigest()[:32]
 
 
 def _encrypt(payload: dict) -> str:
@@ -91,6 +101,27 @@ def _save_config(payload: dict) -> None:
 
 
 # ── HTTP 工具 ─────────────────────────────────────────────────────────────────
+
+def _api_post(base_url: str, path: str, payload: dict) -> dict:
+    import json as _json
+    url = f"{base_url}{path}"
+    data = _json.dumps(payload).encode()
+    req = Request(url, data=data, headers={"Content-Type": "application/json", "Accept": "application/json"})
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    try:
+        with urlopen(req, context=ctx, timeout=15) as resp:
+            body = resp.read().decode()
+            try:
+                return _json.loads(body)
+            except Exception:
+                return {"_raw": body[:200]}
+    except HTTPError as e:
+        return {"error": e.read().decode()[:300], "status_code": e.code}
+    except Exception as e:
+        return {"error": str(e)}
+
 
 def _api_get(base_url: str, path: str) -> dict:
     url = f"{base_url}{path}"
@@ -218,20 +249,128 @@ def rotate_key() -> None:
     print(f"  ✓ 已用当前机器密钥重新加密并保存: {CONFIG_PATH}\n")
 
 
+def login_device(username: str = "", password: str = "") -> None:
+    """登录 QCL 账号，签发 device token 并加密存储到 config。"""
+    if not CONFIG_PATH.exists():
+        print("  ✗ 未找到配置文件，请先运行 --setup", file=sys.stderr)
+        sys.exit(1)
+    cfg = _load_config()
+    base_url = cfg.get("backend_url", DEFAULT_URL)
+
+    if not username:
+        username = input("  QCL 用户名: ").strip()
+    if not password:
+        import getpass
+        password = getpass.getpass("  QCL 密码: ")
+
+    fp = _machine_fingerprint()
+    result = _api_post(base_url, "/api/auth/device-token", {
+        "username": username,
+        "password": password,
+        "client_fingerprint": fp,
+        "label": f"aiticket-reply-skill@{socket.gethostname()}",
+    })
+
+    if "error" in result or not result.get("token"):
+        print(f"  ✗ 登录失败: {result.get('error', result)}", file=sys.stderr)
+        sys.exit(1)
+
+    cfg["device_token"] = result["token"]
+    cfg["device_fingerprint"] = fp
+    _save_config(cfg)
+    os.chmod(str(CONFIG_PATH), 0o600)
+    print(f"  ✓ 已登录: {result.get('display_name', username)}")
+    print(f"  ✓ Device token 已加密保存（机器绑定）")
+
+
+def whoami_device(silent: bool = False) -> bool:
+    """验证当前 device token 是否有效。返回 True=已登录，False=未登录。"""
+    if not CONFIG_PATH.exists():
+        if not silent:
+            print("未登录（未找到配置文件）", end="")
+        return False
+    cfg = _load_config()
+    token = cfg.get("device_token", "")
+    fp = cfg.get("device_fingerprint", "")
+    if not token or not fp:
+        if not silent:
+            print("未登录", end="")
+        return False
+    base_url = cfg.get("backend_url", DEFAULT_URL)
+    result = _api_post(base_url, "/api/auth/device-verify", {
+        "token": token,
+        "client_fingerprint": fp,
+    })
+    if result.get("ok"):
+        if not silent:
+            print(f"已登录: {result.get('display_name', '')}", end="")
+        return True
+    else:
+        if not silent:
+            print("未登录（token 已失效，请重新登录）", end="")
+        return False
+
+
+def logout_device() -> None:
+    """注销 device token。"""
+    if not CONFIG_PATH.exists():
+        print("  未找到配置文件")
+        return
+    cfg = _load_config()
+    token = cfg.get("device_token", "")
+    fp = cfg.get("device_fingerprint", "")
+    if token and fp:
+        base_url = cfg.get("backend_url", DEFAULT_URL)
+        _api_post(base_url, "/api/auth/device-revoke", {
+            "token": token,
+            "client_fingerprint": fp,
+        })
+    cfg.pop("device_token", None)
+    cfg.pop("device_fingerprint", None)
+    _save_config(cfg)
+    print("  ✓ 已注销")
+
+
+def get_auth_headers() -> None:
+    """输出认证 Header 供 curl 使用（每行一个 Header）。"""
+    fp = _machine_fingerprint()
+    if not CONFIG_PATH.exists():
+        print(f"X-AiTicket-Client-Id: {fp}")
+        return
+    cfg = _load_config()
+    token = cfg.get("device_token", "")
+    if token:
+        print(f"X-AiTicket-Token: {token}")
+    print(f"X-AiTicket-Client-Id: {fp}")
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="AITicket Reply Skill 配置")
     parser.add_argument("--setup", action="store_true", help="交互式配置向导")
+    parser.add_argument("--login", action="store_true", help="登录 QCL 账号")
+    parser.add_argument("--whoami", action="store_true", help="验证当前登录状态")
+    parser.add_argument("--logout", action="store_true", help="注销 device token")
     parser.add_argument("--test", action="store_true", help="测试 API 端点连通性")
     parser.add_argument("--get-url", action="store_true", help="输出后端 URL（供 curl 使用）")
+    parser.add_argument("--get-auth-headers", action="store_true", help="输出认证 Header（供 curl 使用）")
     parser.add_argument("--rotate-key", action="store_true", help="机器迁移后重新加密配置")
     args = parser.parse_args()
 
     if args.setup:
         setup_config()
+    elif args.login:
+        login_device()
+    elif args.whoami:
+        whoami_device(silent=False)
+        print()
+    elif args.logout:
+        logout_device()
     elif args.test:
         test_connection()
     elif args.get_url:
         get_url()
+    elif getattr(args, "get_auth_headers"):
+        get_auth_headers()
     elif args.rotate_key:
         rotate_key()
     else:
