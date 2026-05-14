@@ -1,0 +1,15 @@
+# pm-insight skill dependencies
+# Python 3.8+ required
+#
+# macOS:  /usr/bin/python3 -m pip install --user requests cryptography
+# Windows: python -m pip install requests cryptography pywin32
+#
+# 核心依赖 (pm_insight.py, 跨平台):
+requests>=2.28.0
+urllib3>=1.26.0
+
+# 自动配置依赖 (auto_setup.py, Chrome cookie 解密):
+cryptography>=3.4.0
+
+# Windows 专属 (Chrome DPAPI 密钥解密):
+# pywin32>=305; sys_platform == "win32"
