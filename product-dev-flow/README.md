@@ -14,11 +14,25 @@
 
 ## 安装
 
-将 `product-dev-flow/` 目录放入 `~/.claude/skills/`：
+使用内置安装脚本（推荐）：
 
 ```bash
 git clone https://github.com/crosswarm/skills.git /tmp/crosswarm-skills
-cp -r /tmp/crosswarm-skills/product-dev-flow ~/.claude/skills/
+bash /tmp/crosswarm-skills/product-dev-flow/scripts/install.sh
+```
+
+安装脚本会自动完成三件事：
+1. 将 skill 复制到 `~/.claude/skills/product-dev-flow/`
+2. 在 `~/.claude/CLAUDE.md` 追加激活规则（全局对话生效）
+3. 在 `~/.claude/settings.json` 注入 `PostToolUse:EnterPlanMode` hook
+
+> **Plan mode 强制触发机制**：hook 在每次进入 plan mode 时向 Claude 注入一条 `system-reminder`，提示检查复杂度分级并调用本 skill。CLAUDE.md 和 hook 双重保险，任一即可生效。
+
+也可单独操作：
+```bash
+bash install.sh --claude-md-only   # 只改 CLAUDE.md
+bash install.sh --hook-only        # 只改 settings.json
+bash install.sh --dry-run          # 预览，不实际修改
 ```
 
 ## Prerequisites

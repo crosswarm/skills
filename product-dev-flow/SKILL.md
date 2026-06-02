@@ -40,15 +40,32 @@ license: MIT
 | `design-taste-frontend` / `gpt-taste` skill | UXMaster taste 门禁 | 放入对应目录 |
 | `saphire` Python 包 | 文档类产出质量门禁（私有包） | 如无法安装，见下方「saphire 降级方案」 |
 
-### 一键安装脚本（可选依赖的快速方式）
+### 安装脚本（含 plan mode 强制触发机制）
 
 ```bash
-# 克隆 crosswarm/skills 并批量复制所需 skill
 git clone https://github.com/crosswarm/skills.git /tmp/cw-skills
+bash /tmp/cw-skills/product-dev-flow/scripts/install.sh
+```
+
+脚本执行三步：
+1. 复制 skill 到 `~/.claude/skills/product-dev-flow/`
+2. 在 `~/.claude/CLAUDE.md` 追加激活规则（全局对话加载）
+3. 在 `~/.claude/settings.json` 注入 `PostToolUse:EnterPlanMode` hook
+
+**PostToolUse hook 工作原理**：Claude Code 在执行 `EnterPlanMode` 工具后立即运行 hook 脚本，脚本的 stdout 以 `system-reminder` 形式注入对话上下文，Claude 会在计划阶段读到该提醒并触发本 skill。这是目前最精准的 plan mode 强制绑定方式。
+
+可选标志：
+```bash
+bash install.sh --dry-run          # 预览，不实际修改
+bash install.sh --claude-md-only   # 只追加 CLAUDE.md
+bash install.sh --hook-only        # 只改 settings.json hook
+```
+
+批量安装依赖 skill（可选）：
+```bash
 for skill in grill-me planning-with-files agent-reach ralph-loop code-review; do
   [ -d "/tmp/cw-skills/$skill" ] && cp -r "/tmp/cw-skills/$skill" ~/.claude/skills/
 done
-echo "Skills installed to ~/.claude/skills/"
 ```
 
 ---
