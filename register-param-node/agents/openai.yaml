@@ -1,0 +1,7 @@
+interface:
+  display_name: "参数节点注册"
+  short_description: "生成并执行参数节点注册 SQL"
+  default_prompt: "Use $register-param-node to generate and execute parameter node registration SQL from my pasted field values."
+
+policy:
+  allow_implicit_invocation: true
