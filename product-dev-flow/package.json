@@ -1,0 +1,16 @@
+{
+  "name": "product-dev-flow",
+  "version": "1.0.0",
+  "description": "产品开发工作流范式 — L0/L1/L2 复杂度分级 · design→critique→implement→review 六阶段 SOP · 人机闸口 · TDD+SDD+planning-with-files",
+  "author": "crosswarm",
+  "license": "MIT",
+  "keywords": [
+    "claude-skill",
+    "product-dev",
+    "workflow",
+    "tdd",
+    "sop",
+    "oh-my-claudecode",
+    "multi-agent"
+  ]
+}
