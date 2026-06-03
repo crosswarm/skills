@@ -21,10 +21,13 @@ const splitList = (value) => value
 const projectRoot = path.resolve(getArgValue('--project', process.cwd()));
 const requirementDirs = splitList(getArgValue('--requirement-dirs', 'docs/spec,docs/design'));
 const excludeDirs = splitList(getArgValue('--exclude-dirs', 'docs/spec/revision,docs/design/assets'));
+const agentFiles = splitList(getArgValue(
+  '--agent-files',
+  'AGENTS.md,CLAUDE.md,GEMINI.md,.cursor/rules/requirement-revision-guard.mdc,.windsurfrules'
+));
 const revisionDir = path.join(projectRoot, 'docs/spec/revision');
 const scriptsDir = path.join(projectRoot, 'scripts');
 const guardPath = path.join(scriptsDir, 'revision-guard.js');
-const agentsPath = path.join(projectRoot, 'AGENTS.md');
 const packagePath = path.join(projectRoot, 'package.json');
 
 const normalizePath = (filePath) => filePath.split(path.sep).join('/');
@@ -115,12 +118,23 @@ const parseNameStatus = (output) => {
   });
 };
 
+const hasGitHead = () => {
+  try {
+    execGit(['rev-parse', '--verify', 'HEAD']);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 const getChangedEntries = ({ staged }) => {
   if (staged) {
     return parseNameStatus(execGit(['diff', '--cached', '--name-status', '--']));
   }
 
-  const tracked = parseNameStatus(execGit(['diff', '--name-status', 'HEAD', '--']));
+  const tracked = hasGitHead()
+    ? parseNameStatus(execGit(['diff', '--name-status', 'HEAD', '--']))
+    : [];
   const untracked = execGit(['ls-files', '--others', '--exclude-standard'])
     .split(/\\r?\\n/)
     .filter(Boolean)
@@ -350,10 +364,10 @@ const templateSource = `# 需求变更记录：变更标题
 - 记录已执行的校验命令或人工检查结果。
 `;
 
-const agentsBlock = `<!-- requirement-revision-guard:start -->
+const agentRuleBlock = `<!-- requirement-revision-guard:start -->
 ## 需求变更记录强制机制
 
-任何 AI Agent 在会话中识别到新的需求、需求变更、需求澄清、验收标准变化、限制条件变化时，必须把本次变化记录到 \`docs/spec/revision/\`。
+任何 AI Agent 在会话中识别到新的需求、需求变更、需求澄清、验收标准变化、限制条件变化时，必须把本次变化记录到 \`docs/spec/revision/\`。该规则适用于 Codex、Claude Code、Cursor、Gemini CLI、Windsurf 以及其他读取项目规则文件的 Agent 产品。
 
 ### 触发条件
 
@@ -373,18 +387,36 @@ const agentsBlock = `<!-- requirement-revision-guard:start -->
 <!-- requirement-revision-guard:end -->
 `;
 
-const upsertAgentsBlock = () => {
+const cursorRuleSource = `---
+description: 需求变更记录强制机制
+alwaysApply: true
+---
+
+${agentRuleBlock}`;
+
+const upsertBlock = (filePath, block) => {
   const start = '<!-- requirement-revision-guard:start -->';
   const end = '<!-- requirement-revision-guard:end -->';
-  const current = fs.existsSync(agentsPath) ? fs.readFileSync(agentsPath, 'utf8') : '# 项目 Agent 规范\n';
+  const current = fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf8') : '# 项目 AI Agent 规则\n';
 
   if (current.includes(start) && current.includes(end)) {
-    const next = current.replace(new RegExp(`${start}[\\s\\S]*?${end}`), agentsBlock.trim());
-    writeFile(agentsPath, `${next.trim()}\n`);
+    const next = current.replace(new RegExp(`${start}[\\s\\S]*?${end}`), block.trim());
+    writeFile(filePath, `${next.trim()}\n`);
     return;
   }
 
-  writeFile(agentsPath, `${current.trim()}\n\n${agentsBlock}`);
+  writeFile(filePath, `${current.trim()}\n\n${block}`);
+};
+
+const updateAgentRules = () => {
+  agentFiles.forEach((relativePath) => {
+    const filePath = path.join(projectRoot, relativePath);
+    if (relativePath.endsWith('.mdc')) {
+      writeFile(filePath, cursorRuleSource);
+      return;
+    }
+    upsertBlock(filePath, agentRuleBlock);
+  });
 };
 
 const updatePackageScripts = () => {
@@ -409,14 +441,16 @@ if (!fs.existsSync(projectRoot)) {
 writeFile(guardPath, revisionGuardSource({ requirementDirs, excludeDirs }));
 writeFile(path.join(revisionDir, 'README.md'), readmeSource);
 writeFile(path.join(revisionDir, '_TEMPLATE.md'), templateSource);
-upsertAgentsBlock();
+updateAgentRules();
 const hasPackageJson = updatePackageScripts();
 
-console.log(`已安装需求变更记录机制：${normalizePath(projectRoot)}`);
+console.log(`已安装通用 AI Agent 需求变更记录机制：${normalizePath(projectRoot)}`);
 console.log(`- ${normalizePath(path.relative(projectRoot, guardPath))}`);
 console.log(`- ${normalizePath(path.relative(projectRoot, path.join(revisionDir, 'README.md')))}`);
 console.log(`- ${normalizePath(path.relative(projectRoot, path.join(revisionDir, '_TEMPLATE.md')))}`);
-console.log(`- ${normalizePath(path.relative(projectRoot, agentsPath))}`);
+agentFiles.forEach((relativePath) => {
+  console.log(`- ${normalizePath(relativePath)}`);
+});
 if (hasPackageJson) {
   console.log('- package.json scripts: revision:new, revision:check, revision:check:staged');
 } else {
