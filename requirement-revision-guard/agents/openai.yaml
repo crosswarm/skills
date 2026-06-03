@@ -1,0 +1,4 @@
+interface:
+  display_name: "Requirement Revision Guard"
+  short_description: "Enforce requirement change logs"
+  default_prompt: "Use $requirement-revision-guard to install requirement revision tracking in this project."
