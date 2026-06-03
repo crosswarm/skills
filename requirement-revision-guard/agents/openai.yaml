@@ -1,4 +1,4 @@
 interface:
-  display_name: "Requirement Revision Guard"
-  short_description: "Enforce requirement change logs"
-  default_prompt: "Use $requirement-revision-guard to install requirement revision tracking in this project."
+  display_name: "需求变更记录守门"
+  short_description: "强制记录需求新增与变更"
+  default_prompt: "使用 $requirement-revision-guard 为当前项目安装通用 AI Agent 需求变更记录机制。"
