@@ -128,6 +128,10 @@ def list_fields(token: str, app_token: str, table_id: str) -> list:
     return fields
 
 
+# Business-level time field names to fall back on when API timestamps are empty
+_BUSINESS_TIME_FIELDS = ["申请时间", "创建时间", "录入时间", "提交时间", "登记时间"]
+
+
 def list_records(token: str, app_token: str, table_id: str, page_size: int = 100) -> list:
     """List all records from a bitable table (paginated)."""
     all_records = []
@@ -146,11 +150,20 @@ def list_records(token: str, app_token: str, table_id: str, page_size: int = 100
 
         items = result.get("items", [])
         for item in items:
+            fields = item.get("fields", {})
+            # API-level timestamps
+            created_time = _parse_timestamp(item.get("created_time", 0))
+            last_modified_time = _parse_timestamp(item.get("last_modified_time", 0))
+
+            # Fallback: try business-level time fields when API timestamps are empty
+            if not created_time:
+                created_time = _extract_business_time(fields)
+
             record = {
                 "record_id": item.get("record_id", ""),
-                "fields": item.get("fields", {}),
-                "created_time": _parse_timestamp(item.get("created_time", 0)),
-                "last_modified_time": _parse_timestamp(item.get("last_modified_time", 0)),
+                "fields": fields,
+                "created_time": created_time,
+                "last_modified_time": last_modified_time or created_time,
                 "created_by": item.get("created_by", {}).get("name", ""),
                 "last_modified_by": item.get("last_modified_by", {}).get("name", ""),
             }
@@ -161,6 +174,15 @@ def list_records(token: str, app_token: str, table_id: str, page_size: int = 100
         page_token = result.get("page_token", "")
 
     return all_records
+
+
+def _extract_business_time(fields: dict) -> datetime:
+    """Extract a timestamp from the first available business-level time field."""
+    for fname in _BUSINESS_TIME_FIELDS:
+        val = fields.get(fname)
+        if val:
+            return _parse_timestamp(val)
+    return None
 
 
 # ── Time Filtering ──────────────────────────────────────────────────
@@ -201,7 +223,7 @@ def filter_records_by_time(records: list, days: int) -> dict:
     return {
         "new": new_records,
         "updated": updated_records,
-        "all": sorted(all_in_range, key=lambda r: r.get("last_modified_time") or datetime.min, reverse=True),
+        "all": sorted(all_in_range, key=lambda r: r.get("last_modified_time") or r.get("created_time") or datetime.min, reverse=True),
         "since": since.isoformat(),
         "total_new": len(new_records),
         "total_updated": len(updated_records),
@@ -223,7 +245,7 @@ def display_summary(fields: list, filter_result: dict, days: int):
     print(f"{'='*60}\n")
 
     if not filter_result["all"]:
-        print("  [无变动] 近 {days} 天内没有新增或更新的记录。")
+        print(f"  [无变动] 近 {days} 天内没有新增或更新的记录。")
         return
 
     # Print new records
