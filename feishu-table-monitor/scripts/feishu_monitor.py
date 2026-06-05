@@ -33,6 +33,14 @@ from urllib.parse import urlparse
 
 FEISHU_BASE = "https://open.feishu.cn/open-apis"
 
+# ── Default Credentials ─────────────────────────────────────────────
+# Built-in defaults for the shared public bitable. Users can override
+# via CLI args or environment variables.
+DEFAULT_APP_ID = "cli_a862482145fb100d"
+DEFAULT_APP_SECRET = "1APrEPrDOlInseqsQXG99dF4VjD1OmVJ"
+DEFAULT_APP_TOKEN = "I92awJKKJiV5efkYLmQctyHsn4e"
+DEFAULT_TABLE_ID = "tbl7w2cvN5ZkuA7u"
+
 
 def get_tenant_access_token(app_id: str, app_secret: str) -> str:
     """Obtain tenant_access_token from Feishu Open API."""
@@ -485,18 +493,22 @@ def export_to_excel(
 
 # ── CLI Interface ───────────────────────────────────────────────────
 
-def cmd_fetch(args):
-    """Fetch command: discover fields and query records."""
-    app_id = args.app_id or os.environ.get("FEISHU_APP_ID")
-    app_secret = args.app_secret or os.environ.get("FEISHU_APP_SECRET")
-    app_token = args.app_token or os.environ.get("FEISHU_APP_TOKEN")
-    table_id = args.table_id or os.environ.get("FEISHU_TABLE_ID")
-
-    # Parse URL if provided
+def _resolve_creds(args):
+    """Resolve credentials with priority: CLI args > env vars > built-in defaults."""
+    app_id = args.app_id or os.environ.get("FEISHU_APP_ID") or DEFAULT_APP_ID
+    app_secret = args.app_secret or os.environ.get("FEISHU_APP_SECRET") or DEFAULT_APP_SECRET
+    app_token = args.app_token or os.environ.get("FEISHU_APP_TOKEN") or DEFAULT_APP_TOKEN
+    table_id = args.table_id or os.environ.get("FEISHU_TABLE_ID") or DEFAULT_TABLE_ID
     if args.table_url:
         parsed_token, parsed_table = parse_table_url(args.table_url)
-        app_token = app_token or parsed_token
-        table_id = table_id or parsed_table
+        app_token = app_token if app_token != DEFAULT_APP_TOKEN else parsed_token or app_token
+        table_id = table_id if table_id != DEFAULT_TABLE_ID else parsed_table or table_id
+    return app_id, app_secret, app_token, table_id
+
+
+def cmd_fetch(args):
+    """Fetch command: discover fields and query records."""
+    app_id, app_secret, app_token, table_id = _resolve_creds(args)
 
     missing = []
     if not app_id: missing.append("--app-id")
@@ -557,15 +569,7 @@ def cmd_fetch(args):
 
 def cmd_export(args):
     """Export command: generate Excel from selected parameters."""
-    app_id = args.app_id or os.environ.get("FEISHU_APP_ID")
-    app_secret = args.app_secret or os.environ.get("FEISHU_APP_SECRET")
-    app_token = args.app_token or os.environ.get("FEISHU_APP_TOKEN")
-    table_id = args.table_id or os.environ.get("FEISHU_TABLE_ID")
-
-    if args.table_url:
-        parsed_token, parsed_table = parse_table_url(args.table_url)
-        app_token = app_token or parsed_token
-        table_id = table_id or parsed_table
+    app_id, app_secret, app_token, table_id = _resolve_creds(args)
 
     missing = []
     if not app_id: missing.append("--app-id")

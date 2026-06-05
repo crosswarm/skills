@@ -1,6 +1,6 @@
 ---
 name: feishu-table-monitor
-description: "Monitor a Feishu Bitable (飞书多维表格) for recently added or updated records, support conversational parameter selection by name or code, and export selected parameters to Excel matching the parameter database template format. Shared project skill — each user connects their own Feishu auth. Trigger keywords: 飞书表格, 多维表格, 监控, 新增, 更新, 导出Excel, bitable, feishu monitor."
+description: "Monitor a Feishu Bitable (飞书多维表格) for recently added or updated records, support conversational parameter selection by name or code, and export selected parameters to Excel matching the parameter database template format. Zero-config for the default shared table. Trigger keywords: 飞书表格, 多维表格, 监控, 新增, 更新, 导出Excel, bitable, feishu monitor."
 agent_created: true
 ---
 
@@ -10,15 +10,31 @@ agent_created: true
 
 Monitor a Feishu Bitable (飞书多维表格) for data changes within a configurable time window (default: 7 days). Present newly added and recently updated records conversationally for the user to select, then export the chosen records to an Excel file matching the parameter database template format (transposed: one column per parameter, one row per metadata field).
 
-This is a **project-level shared skill**. Each user brings their own Feishu authentication — either by connecting the Feishu connector or providing API credentials.
+**Zero configuration** — the default shared bitable credentials are built into the script. Users can start monitoring immediately without any setup.
 
-## First-Time Setup (Each User Must Do Once)
+## Quick Start (No Setup Required)
 
-When a new user triggers this skill for the first time, guide them through setup:
+The default shared bitable is pre-configured. Simply trigger the skill and it works out of the box:
 
-1. **Connect Feishu**: Ask the user to connect the Feishu connector in WorkBuddy settings. This is the simplest method — no API credentials needed.
-2. **Or provide API credentials** (fallback): If the connector isn't available, ask for `app_id` and `app_secret` from the Feishu Open Platform (https://open.feishu.cn). The app needs `bitable:app` permission. Store these as env vars: `FEISHU_APP_ID`, `FEISHU_APP_SECRET`.
-3. **Confirm table access**: The default table (`I92awJKKJiV5efkYLmQctyHsn4e` / `tbl7w2cvN5ZkuA7u`) is publicly visible to all organization members. If the user wants to monitor a different table, ask for the URL.
+```
+# Fetch recent changes (no args needed)
+python3 scripts/feishu_monitor.py fetch
+
+# Export specific parameters
+python3 scripts/feishu_monitor.py export --params "CODE1,CODE2"
+```
+
+No Feishu connector, no App ID, no App Secret required for the default table.
+
+## Using a Different Table (Override)
+
+To monitor a different bitable, provide your own credentials:
+
+1. **Via CLI args**: `--app-id`, `--app-secret`, `--app-token`, `--table-id`, or `--table-url`
+2. **Via env vars**: `FEISHU_APP_ID`, `FEISHU_APP_SECRET`, `FEISHU_APP_TOKEN`, `FEISHU_TABLE_ID`
+3. **Via Feishu connector**: Connect the Feishu connector in WorkBuddy settings
+
+Priority: CLI args > env vars > built-in defaults.
 
 ## Default Table Configuration
 
@@ -34,32 +50,26 @@ The shared default table (used unless user specifies otherwise):
 
 ## Auth Method Priority
 
-1. **Preferred: Feishu Connector** — If `feishu` connector is connected, use its MCP tools for bitable operations. Each user connects their own.
-2. **Fallback: Direct API** — Use the Python script with per-user `app_id` and `app_secret` via env vars or CLI.
+1. **Built-in defaults** — The script ships with pre-configured credentials for the default shared table. Zero setup needed.
+2. **CLI args / env vars** — Override defaults for a different table or app credentials.
+3. **Feishu connector** — If `feishu` connector is connected, use its MCP tools for bitable operations.
 
 ## Workflow
 
 ### Step 1: Check Auth & Table
 
-Before any operation, verify access:
-
-- **Check Feishu connector**: Is it connected? If yes, proceed. If no, check for env vars `FEISHU_APP_ID` / `FEISHU_APP_SECRET`.
-- **If neither is available**: Walk the user through first-time setup (see above).
-- **Table target**: Use the shared default unless the user provides a different URL.
+- **Default table**: No auth needed — built-in credentials work out of the box.
+- **Custom table**: If the user provides a different URL, check for CLI args / env vars / Feishu connector.
 - **Time range**: Default to 7 days. Ask only if the user specifies otherwise.
 
 ### Step 2: Fetch Table Data
 
 **If Feishu connector is connected**: Use its MCP tools to list fields and records. Filter by `created_time` / `last_modified_time` client-side within Python.
 
-**If using fallback script** (replace placeholders with the user's credentials):
+**Using the script** (default table — no credentials needed):
 
 ```bash
-python3 .workbuddy/skills/feishu-table-monitor/scripts/feishu_monitor.py fetch \
-  --app-id "$FEISHU_APP_ID" \
-  --app-secret "$FEISHU_APP_SECRET" \
-  --table-url "TABLE_URL" \
-  --days 7
+python3 scripts/feishu_monitor.py fetch --days 7
 ```
 
 The fetch process:
@@ -117,13 +127,10 @@ from feishu_monitor import export_to_excel
 export_to_excel(records, fields, ['CODE1', 'CODE2'], 'output.xlsx')
 ```
 
-**If using fallback script**:
+**Using the script** (default table — no credentials needed):
 
 ```bash
-python3 .workbuddy/skills/feishu-table-monitor/scripts/feishu_monitor.py export \
-  --app-id "$FEISHU_APP_ID" \
-  --app-secret "$FEISHU_APP_SECRET" \
-  --table-url "TABLE_URL" \
+python3 scripts/feishu_monitor.py export \
   --params "CODE1,CODE2" \
   --output "参数导出结果_YYYYMMDD.xlsx"
 ```
@@ -148,9 +155,9 @@ After generation:
 
 | Scenario | Action |
 |----------|--------|
-| New user, no auth set up | Walk through first-time setup. Each user needs their own Feishu connector or API credentials. |
-| Feishu connector disconnected | Check for env vars. If none, guide user to connect in settings or provide credentials. |
-| Feishu auth fails (fallback) | Verify app_id/app_secret and `bitable:app` permission. |
+| Default table, no user auth | Works out of the box — built-in credentials handle everything. |
+| Custom table, no override credentials | Ask user to provide `--app-id`/`--app-secret` or set env vars. |
+| Feishu auth fails | Verify app_id/app_secret and `bitable:app` permission. |
 | No records in time range | "近 N 天内没有新增或更新的记录。是否需要扩大时间范围？" |
 | Table URL parsing fails | Fall back to default table. |
 | Selected codes not found | List available codes/names from fetched data, ask user to pick. |
@@ -169,11 +176,11 @@ Original parameter database Excel template for visual reference. Read-only — t
 
 ## Usage Examples
 
-**First-time user:**
+**Default table (zero config):**
 - "帮我看看这个飞书表格最近有什么变化"
-- If auth missing → guide setup → use default table → fetch 7 days → present → select → export
+- Fetch 7 days from default table → present → select → export
 
-**Returning user with different table:**
+**Custom table:**
 - "监控 https://xxx.feishu.cn/wiki/ABC?table=xyz 近30天的变化"
 - Use provided URL → fetch 30 days → present → select → export
 
