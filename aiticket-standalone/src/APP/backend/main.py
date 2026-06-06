@@ -966,11 +966,6 @@ FRONTEND_ASSETS_DIR = os.path.join(FRONTEND_DIR, "assets")
 # Mount static assets only from the dedicated assets directory.
 app.mount("/assets", StaticFiles(directory=FRONTEND_ASSETS_DIR), name="assets")
 
-# Mount StackEdit as self-hosted local service (no external stackedit.io dependency)
-_STACKEDIT_DIR = os.path.join(FRONTEND_DIR, "stackedit")
-if os.path.isdir(_STACKEDIT_DIR):
-    app.mount("/stackedit", StaticFiles(directory=_STACKEDIT_DIR, html=True), name="stackedit")
-
 # Mount conclusion directory for exploration assets (screenshots, prototypes, findings)
 _CONCLUSION_DIR = os.path.join(os.path.dirname(FRONTEND_DIR), "..", "conclusion")
 _CONCLUSION_DIR = os.path.normpath(_CONCLUSION_DIR)

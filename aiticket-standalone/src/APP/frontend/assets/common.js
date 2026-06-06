@@ -91,12 +91,6 @@ const getApiBase = () => {
 /** API基础URL（页面加载时计算一次） */
 const API_BASE = getApiBase();
 
-/**
- * StackEdit 本地服务 URL（与当前应用同源，path: /stackedit）
- * cf/lap/QCL 均通过 window.location.origin 自动适配，无需额外配置
- */
-const STACKEDIT_URL = `${window.location.origin}/stackedit`;
-
 let llmConfigFetchImpl = (...args) => fetch(...args);
 
 function getStoredLLMConfig() {
@@ -386,7 +380,6 @@ if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     getApiBase,
     API_BASE,
-    STACKEDIT_URL,
     getStoredLLMConfig,
     getSharedLLMConfig,
     __setFetchForTests(fn) {

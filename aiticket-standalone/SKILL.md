@@ -51,6 +51,8 @@ aiticket-standalone/
 
 ## 安装
 
+> 📖 **面向安装用户的完整图文指南（前置要求 / 快速开始 / 配置 / 抓 Jira 会话 / 体积说明 / 故障排查 / 卸载）见同目录 [`INSTALL.md`](INSTALL.md)。** 下面是给 Agent 的速查。
+
 ```bash
 # 默认用随包 src/ 安装（免 clone）
 python tools/install.py --admin-user admin --admin-password '<设个密码>' --jira-url https://jira.example.com
