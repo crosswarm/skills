@@ -1,0 +1,104 @@
+---
+name: aiticket-standalone
+description: 在本地一条命令安装并运行 aiticket 轻量化服务（跨平台 Win/Mac/Linux）——仅 Jira 数据源的智能看板 + 智能回复 + 知识库(KB)检索 + 自学习，并作为 MCP server 把上下文/证据/回复能力暴露给调用方 Agent（Claude Code / OpenClaw / WorkBuddy）。本 skill 自带安装器/控制器/MCP server/浏览器扩展。触发词："安装 aiticket"、"本地工单服务"、"aiticket standalone"、"aiticket install/config/start/stop/status/logs/update/uninstall"、"配置 aiticket MCP"、"装 Jira 会话扩展"。
+---
+
+# aiticket-standalone — 本地轻量化 Jira 智能看板服务
+
+给装了 Claude Code 的开发者：在本地一条命令装好并跑起一套**精简版 aiticket**（仅 Jira 数据源），
+保留三大核心 **智能回复 + 知识库(KB)检索 + 自学习**，含 Web 智能看板。跨平台 Win/Mac/Linux 原生。
+
+- **向量层** sqlite-vec + 本地 fastembed（无 ChromaDB，单 SQLite 文件，体积小）。
+- **LLM 可选**：默认不配 key = **纯 MCP 委托**（由调用方 Agent 用自己的 LLM 生成回复）；
+  配了 key 则服务也能独立出回复。embedding 始终本地（无 key、KB 自包含）。
+- **Jira 会话鉴权**：浏览器扩展自动抓 JSESSIONID（推荐）+ 看板内手动粘贴（兜底）。
+
+## 本 skill 自带（bundled）
+
+```
+aiticket-standalone/
+├── SKILL.md                      ← 本文件
+├── tools/                        ← 跨平台 Python 工具（不依赖 bash）
+│   ├── install.py                安装器（取源码→uv venv→装依赖→写配置→init_db→seed_admin→注册自启→起服务→探活→生成 skill token）
+│   ├── aiticket_ctl.py           控制器（start/stop/restart/status/logs，/api/liveness 探活）
+│   ├── aiticket_paths.py         路径唯一真相源（venv bin/Scripts、端口优先级、service_env）
+│   ├── service_manager.py        launchd / systemd --user / Windows schtasks 三后端 + pidfile 兜底
+│   ├── mcp_server.py             MCP server（薄 HTTP 桥，9 工具）
+│   ├── make_skill_token.py       为 admin 生成 skill token 写 env.json
+│   ├── requirements-mcp.txt      MCP 依赖（mcp + httpx）
+│   └── test_*.py                 路径/服务单元渲染单测（21 项）
+└── browser-extension/aiticket-jira-session/   ← Chrome/Edge MV3，自动抓 Jira 会话
+```
+
+服务源码（后端 + 静态前端）由 install.py 从 **github.com/crosswarm/aiticket 的 `aiticket-standalone` 分支** 克隆。
+
+安装布局：`~/.aiticket/{src,venv,data,kb,config}`（`AITICKET_HOME` 可改）。
+> 运行工具用 venv 的 python：`<HOME>/venv/bin/python`（Windows: `<HOME>\venv\Scripts\python.exe`）。
+> 安装器/控制器自身只需系统 Python 3.11+（仅用 stdlib）。
+
+## 命令 → 动作
+
+| 命令 | 做什么 |
+|------|--------|
+| `/aiticket-install [--full]` | `python tools/install.py`（默认克隆 crosswarm/aiticket@aiticket-standalone；`--full` 加装报表依赖）。装好后服务在 `http://127.0.0.1:18080`，并自动生成 skill token 写入 env.json |
+| `/aiticket-config` | 引导填 Jira 地址 / KB 目录 / 可选 LLM key → 写 `config/deployment.yaml`+`env.json` → restart → 引导装浏览器扩展 |
+| `/aiticket-start` `stop` `restart` `status` `logs` | `python tools/aiticket_ctl.py <cmd>` |
+| `/aiticket-update` | `git -C <HOME>/src pull` → `uv pip install`（热缓存秒级）→ `init_db`（幂等）→ restart |
+| `/aiticket-uninstall [--purge]` | 停服务 + 注销自启；`--purge` 连 data 一起删 |
+| `/aiticket-mcp` | 打印 MCP 客户端配置片段（把本服务接入 Claude Code / OpenClaw） |
+
+## 安装
+
+```bash
+# 默认克隆 crosswarm/aiticket@aiticket-standalone
+python tools/install.py --admin-user admin --admin-password '<设个密码>' --jira-url https://jira.example.com
+# 或从本地 checkout 安装（开发）
+python tools/install.py --src /path/to/aiticket --admin-user admin --admin-password '***'
+```
+要点：
+- 装完自动 `generate_skill_token` 写入 `<HOME>/config/env.json`，MCP / 浏览器扩展开箱即用鉴权。
+- 自启：macOS=launchd、Linux=systemd --user、Windows=计划任务；不注册加 `--no-autostart`（改用 pidfile，不写系统单元）。
+- 打开 `http://127.0.0.1:18080` 即见登录 → 智能看板。
+
+## 数据持久化
+
+- **auth.db（管理员/会话）外置 `<HOME>/data/sqlite`**，service_env 经 `APP_AUTH_DB_PATH` pin，更新/重装都不丢。
+- 向量库/回复训练器/缓存在 `<HOME>/src/APP/backend/data`（git 忽略）：`/aiticket-update`(git pull) 保留；
+  `--force` 重装或全新 clone 会清空（可从 Jira/KB 重建）。
+
+## 浏览器扩展（自动抓 Jira 会话）
+
+`browser-extension/aiticket-jira-session/`（Chrome/Edge MV3）：
+1. `chrome://extensions` → 开发者模式 → 加载已解压的扩展 → 选该目录。
+2. 点扩展图标，填 Jira 地址、本地服务地址（默认 `http://127.0.0.1:18080`）、skill token（install 已生成，见 env.json）。
+3. 「立即推送」即把 `JSESSIONID` 推到本地服务；会话变化/定时自动重推。
+手动兜底：看板设置粘贴 JSESSIONID（`/api/settings/jira-session-binding`）。
+
+## 接入 MCP（核心：纯委托模式）
+
+服务作 MCP server，调用方用**自己的 LLM** 编排生成。先 `uv pip install -r tools/requirements-mcp.txt`，Claude Code 配置：
+```json
+{
+  "mcpServers": {
+    "aiticket": {
+      "command": "<HOME>/venv/bin/python",
+      "args": ["<此 skill 目录>/tools/mcp_server.py"],
+      "env": {
+        "AITICKET_HOME": "<HOME>"
+      }
+    }
+  }
+}
+```
+（mcp_server 仅凭 `AITICKET_HOME` 自动从 env.json 读端口 + skill_token。Windows 用 `<HOME>\venv\Scripts\python.exe`。）
+
+MCP 工具：`build_reply_context(issue_key)` 拿证据 + prompt 模板 → 你用自己的 LLM 生成回复正文；
+`search_kb` 检索知识库；`run_gates`/`get_reuse_candidates` 看 gate 判定与复用候选；
+`list_board`/`get_ticket`/`check_completeness`/`service_health`；`generate_reply` 仅当服务配了 LLM key 时可用。
+> `build_reply_context` 是纯只读：跑完非 LLM 的证据收集后即返回，**绝不调 LLM、绝不写 Jira**。
+
+## 跨平台说明
+
+- 路径/服务管理已全跨平台（venv bin/Scripts、launchd/systemd/schtasks、portalocker、tempfile）。
+- 端口默认 18080，`--port` 或 `config/env.json` 的 `port` 可改。
+- `AITICKET_SERVICE_BACKEND=pidfile` 可强制 pidfile 管理（不注册系统服务，适合临时/测试/CI）。

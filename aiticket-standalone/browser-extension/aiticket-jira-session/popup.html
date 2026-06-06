@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <style>
+    body { font: 13px/1.5 -apple-system, "Segoe UI", sans-serif; width: 320px; margin: 0; padding: 14px; color: #1f2937; }
+    h1 { font-size: 14px; margin: 0 0 10px; }
+    label { display: block; font-size: 12px; color: #6b7280; margin: 8px 0 2px; }
+    input { width: 100%; box-sizing: border-box; padding: 6px 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 12px; }
+    .row { display: flex; gap: 8px; margin-top: 12px; }
+    button { flex: 1; padding: 8px; border: 0; border-radius: 6px; font-size: 13px; cursor: pointer; }
+    .primary { background: #4f46e5; color: #fff; }
+    .ghost { background: #f3f4f6; color: #374151; }
+    #status { margin-top: 10px; padding: 8px; border-radius: 6px; font-size: 12px; display: none; }
+    .ok { background: #dcfce7; color: #166534; }
+    .err { background: #fee2e2; color: #991b1b; }
+    .hint { font-size: 11px; color: #9ca3af; margin-top: 4px; }
+  </style>
+</head>
+<body>
+  <h1>aiticket Jira 会话同步</h1>
+
+  <label>Jira 地址（含协议）</label>
+  <input id="jiraBaseUrl" placeholder="https://jira.example.com" />
+
+  <label>本地服务地址</label>
+  <input id="serviceUrl" placeholder="http://127.0.0.1:18080" />
+
+  <label>Skill Token</label>
+  <input id="skillToken" type="password" placeholder="由 /aiticket-config 生成" />
+  <div class="hint">在 aiticket 已登录浏览器里抓 JSESSIONID 推送到本地服务。</div>
+
+  <div class="row">
+    <button id="save" class="ghost">保存</button>
+    <button id="push" class="primary">立即推送</button>
+  </div>
+
+  <div id="status"></div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

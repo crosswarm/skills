@@ -1,0 +1,5 @@
+# aiticket compact — MCP server 额外依赖（仅作 MCP 工具提供方时需要）
+# 安装：uv pip install -r tools/requirements-mcp.txt
+mcp>=1.2.0
+# httpx 已在 requirements-core.txt；此处显式声明以便单独安装本文件
+httpx>=0.28.1
