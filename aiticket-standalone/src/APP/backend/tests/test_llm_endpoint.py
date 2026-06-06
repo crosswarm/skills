@@ -34,6 +34,7 @@ class TestLLMTestLogic:
         assert result["status"] == "error"
         assert "API Key" in result["message"]
 
+    @pytest.mark.skip(reason="google/gemini 已移至 requirements-full，core 不含")
     def test_gemini_success(self):
         """测试Gemini连接成功"""
         with patch('google.genai.Client') as mock_client_class:
@@ -56,6 +57,7 @@ class TestLLMTestLogic:
             assert response.text == "OK"
             mock_client.models.generate_content.assert_called_once()
 
+    @pytest.mark.skip(reason="google/gemini 已移至 requirements-full，core 不含")
     def test_gemini_default_model(self):
         """测试Gemini使用默认模型"""
         with patch('google.genai.Client') as mock_client_class:

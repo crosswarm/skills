@@ -479,7 +479,7 @@ def test_sync_builds_hybrid_index_artifacts(kb_fixture):
     assert result["ok"] is True
     assert result["chunk_count"] >= 2
     assert kb_fixture["sqlite_path"].exists()
-    assert kb_fixture["chroma_path"].exists()
+    # compact 已迁 sqlite-vec：向量并入 sqlite，不再产生独立 chroma 目录
 
 
 def test_sync_builds_manifest_from_raw_kb_sources(tmp_path: Path):

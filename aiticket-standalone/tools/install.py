@@ -122,18 +122,22 @@ def write_config(home: Path, port: int, jira_url: str, kb_dir: str | None) -> No
     _step("写配置 deployment.yaml + env.json")
     kb_root = str(Path(kb_dir).expanduser().resolve()) if kb_dir else str(P.kb_dir(home))
     # deployment.yaml（config.loader 经 CONFIG_FILE 读取）
+    # 单引号 YAML + 转义（install.py 跑在系统 python，无 PyYAML 依赖；
+    # 单引号串只需把 ' 翻倍，可安全容纳 URL 里的 : / " \\ 等特殊字符）
+    def _yq(v: str) -> str:
+        return str(v).replace("'", "''")
     yaml_text = (
         "# aiticket compact 实例配置（由 install.py 生成，可手改后 restart 生效）\n"
         "instance:\n"
         "  name: aiticket compact\n"
         "  slug: aiticket\n"
         "jira:\n"
-        f"  base_url: \"{jira_url}\"\n"
+        f"  base_url: '{_yq(jira_url)}'\n"
         "  ssl_verify: true\n"
         "kb:\n"
-        f"  root_dir: \"{kb_root}\"\n"
+        f"  root_dir: '{_yq(kb_root)}'\n"
         "llm:\n"
-        "  default_provider_chain: [\"zhipu\", \"minimax\"]\n"
+        "  default_provider_chain: ['zhipu', 'minimax']\n"
     )
     P.deployment_yaml_path(home).write_text(yaml_text, encoding="utf-8")
     print(f"  ✓ {P.deployment_yaml_path(home)}")
@@ -265,7 +269,7 @@ def main(argv: list[str] | None = None) -> int:
     home = Path(args.home).expanduser() if args.home else P.default_home()
     port = P.resolve_port(home, override=args.port)
 
-    # 发布版：tools/ 同级若有 bundled 源码（git archive 出的 APP/），默认用它免 clone
+    # 发布版：tools/ 同级若有 bundled 源码（src/APP/backend/main.py），默认用它免 clone
     if not args.src:
         _bundled = Path(__file__).resolve().parent.parent / "src"
         if (_bundled / "APP" / "backend" / "main.py").exists():

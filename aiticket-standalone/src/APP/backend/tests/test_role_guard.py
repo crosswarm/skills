@@ -88,6 +88,7 @@ class TestJiraServiceStrictMode:
 # PM wallet strict check
 # ---------------------------------------------------------------------------
 
+@pytest.mark.skip(reason="PM 钱包/模块服务已在 compact 剥离（services.pm_* 不存在）")
 class TestPMWalletStrictMode:
     def test_unbound_user_strict_raises(self, monkeypatch, tmp_path):
         monkeypatch.setenv("AITICKET_ROLE", "qcl")
@@ -119,6 +120,7 @@ class TestPMWalletStrictMode:
 # PMModuleService threading.local isolation
 # ---------------------------------------------------------------------------
 
+@pytest.mark.skip(reason="PM 钱包/模块服务已在 compact 剥离（services.pm_* 不存在）")
 class TestPMModuleServiceThreadingLocal:
     def test_current_pm_user_thread_isolated(self):
         import threading
