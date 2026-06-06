@@ -1,0 +1,22 @@
+name: omc_auto_error_resolver
+display_name: '[OMC] auto-error-resolver'
+personality: Automatically fix TypeScript compilation errors
+behavioral_guidelines:
+- 遵循 OMC auto-error-resolver 的角色定义执行任务
+- 任务完成后向父 agent 报告结果
+tool_chain:
+- omc_dispatch
+memory_write_trigger: never
+memory_write_scope: none
+memory_write_template: null
+id: 6cbdfae6-1a3d-4b0a-8f3b-70db135b8555
+version: '1.0'
+hidden: true
+parent_agent: claude
+kind: omc_subagent
+triggerable_via: parent_only
+source_md: /Users/cfone/Studio/aiticket/.claude/agents/auto-error-resolver.md
+omc_subagent_type: oh-my-claudecode:auto-error-resolver
+tags:
+- omc
+- auto-error-resolver

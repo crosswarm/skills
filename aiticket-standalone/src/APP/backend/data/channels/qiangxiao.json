@@ -1,0 +1,27 @@
+{
+  "user_id": "qiangxiao",
+  "display_name": "强骁",
+  "channels": {
+    "feishu": {
+      "enabled": true,
+      "chat_id": "oc_72ef8553bb8b552435cd91b0fb1e86ab",
+      "openclaw_user_id": "",
+      "notify_types": [
+        "requirement_review",
+        "prd_ready",
+        "memory_health",
+        "schedule_result"
+      ]
+    }
+  },
+  "preferences": {
+    "auto_confirm_timeout": 60,
+    "min_score_for_notify": 8,
+    "assigned_modules": [
+      "流程中心",
+      "消息"
+    ]
+  },
+  "created_at": "2026-04-05T08:20:48.165673",
+  "updated_at": "2026-04-05T08:20:48.165686"
+}

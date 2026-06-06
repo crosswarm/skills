@@ -1,0 +1,62 @@
+{
+  "id": "daily-summary-watchdog-0900",
+  "name": "日报看护：09:00 检查 07:25 是否发送成功",
+  "description": "检查昨日归档文件是否存在 + 飞书是否发送成功，失败则补发",
+  "cron": "0 9 * * *",
+  "trigger_type": "cron",
+  "enabled": true,
+  "task_type": "daily_summary_watchdog",
+  "cooldown_hours": 20,
+  "params": {},
+  "created_by": "claude",
+  "created_at": "2026-04-30T00:00:00",
+  "last_run": "2026-06-05T23:55:05.784424",
+  "next_run": null,
+  "run_count": 9,
+  "last_status": "success",
+  "recent_runs": [
+    {
+      "ts": "2026-05-09T09:00:19.711503",
+      "status": "success",
+      "duration_s": 0.0
+    },
+    {
+      "ts": "2026-05-10T09:00:58.133078",
+      "status": "success",
+      "duration_s": 0.0
+    },
+    {
+      "ts": "2026-05-11T09:00:51.288109",
+      "status": "success",
+      "duration_s": 109.9
+    },
+    {
+      "ts": "2026-05-12T09:50:51.301974",
+      "status": "success",
+      "duration_s": 0.0
+    },
+    {
+      "ts": "2026-05-13T09:00:00.903957",
+      "status": "success",
+      "duration_s": 0.0
+    },
+    {
+      "ts": "2026-05-14T09:03:47.875907",
+      "status": "success",
+      "duration_s": 0.0
+    },
+    {
+      "ts": "2026-05-15T09:00:27.582670",
+      "status": "success",
+      "duration_s": 0.0
+    },
+    {
+      "ts": "2026-06-05T23:55:05.784424",
+      "status": "success",
+      "duration_s": 21.7
+    }
+  ],
+  "created_by_uuid": "aaac6ff8-d4a6-ce54-1d0b-0538426b0028",
+  "schema_version": "1.0",
+  "agent_hint": "daily_summary"
+}

@@ -1,0 +1,155 @@
+[
+  {
+    "id": "deferred-phase2-chroma-cleanup",
+    "created_at": "2026-05-20T00:00:00Z",
+    "status": "pending",
+    "title": "Phase2遗留 — 删除旧chroma路径 + root data/改名",
+    "prompt": "Phase 2 终轮遗留清理（24h 观察期已过）。请确认服务稳定后执行：\n1. 确认 audit 无 [E]：python3 scripts/audit/check_layout.py\n2. 确认向量库正常：curl -sf http://localhost:3000/api/board/stats | grep issues_count\n3. 删除旧 chroma 路径：\n   rm -rf APP/data/chroma_kb APP/data/chroma_kb_runtime\n   rm -rf APP/backend/chroma_db\n   rm -rf APP/backend/data/reply_trainer/chroma APP/backend/data/reply_trainer/chroma_runtime\n   rm -rf APP/backend/data/competitor_kb/chroma\n4. 再次确认服务正常\n5. root data/ 改名：mv data data.legacy.$(date +%Y%m%d)\n6. 运行 audit，提交 git commit 记录清理完成",
+    "llm_provider": "local",
+    "fallback_chain": [
+      "local",
+      "zhipu",
+      "minimax"
+    ],
+    "tags": [
+      "phase2",
+      "cleanup",
+      "chroma"
+    ]
+  },
+  {
+    "id": "deferred-phase2-qcl-sync",
+    "created_at": "2026-05-20T00:00:00Z",
+    "status": "pending",
+    "title": "Phase2遗留 — QCL 同步（本机稳定后执行）",
+    "prompt": "Phase 2 终轮 QCL 同步。本机稳定确认后在 QCL 服务器上执行：\n1. git pull（拉取 Phase 2 所有 commits）\n2. 安装 pre-commit hook：bash scripts/hooks/install.sh\n3. 运行 chroma 物理迁移脚本（需服务窗口期）：bash scripts/migrate/phase2_final_chroma.sh\n4. 验证 QCL 服务健康：curl -sf http://127.0.0.1:18000/api/board/stats\n5. 运行 audit：python3 scripts/audit/check_layout.py",
+    "llm_provider": "local",
+    "fallback_chain": [
+      "local",
+      "zhipu",
+      "minimax"
+    ],
+    "tags": [
+      "phase2",
+      "qcl",
+      "sync"
+    ]
+  },
+  {
+    "id": "deferred-1779034761",
+    "created_at": "2026-05-17T16:19:21Z",
+    "status": "pending",
+    "prompt": "PS。周报月报数据模块也有问题，点击报没有csv文件，同时，上周的周报也没有自动生成\n",
+    "llm_provider": "local",
+    "fallback_chain": [
+      "local",
+      "zhipu",
+      "minimax"
+    ],
+    "task_type": "deferred_prompt"
+  },
+  {
+    "id": "deferred-1779072790",
+    "created_at": "2026-05-18T02:53:10Z",
+    "status": "pending",
+    "prompt": "看板上有大量问题：1. LCZX-63084，例如这种已经解决或者归属已经不是 LCZX 的工单大量在列表里，这个问题我说了好多遍了，完成状态包括研发已完成、支持确认完成两种；2.看板未按照头部的项目筛选器进行问题过滤，顶部目前设置了 LCZX 的过滤，但是列表里还有 YYZJ 等项目；3. 详情抽屉里的基本信息大部分字段包括标题都没有数据，这个 bug 之前修复过，又出来了\n",
+    "llm_provider": "local",
+    "fallback_chain": [
+      "local",
+      "zhipu",
+      "minimax"
+    ],
+    "task_type": "deferred_prompt"
+  },
+  {
+    "id": "deferred-1779084625",
+    "created_at": "2026-05-18T06:10:25Z",
+    "status": "pending",
+    "prompt": "帮我分析下gitnexus还是这个https://github.com/safishamsi/graphify 适合我？\n",
+    "llm_provider": "local",
+    "fallback_chain": [
+      "local",
+      "zhipu",
+      "minimax"
+    ],
+    "task_type": "deferred_prompt"
+  },
+  {
+    "id": "deferred-1779102452",
+    "created_at": "2026-05-18T11:07:32Z",
+    "status": "pending",
+    "prompt": "LCZX-63158、LCZX-63162、LCZX-63197，这三个工单在按到期日模式下一直在分析中状态；智能决策模式下，大部分工单都是“综合 · 计算中”\n",
+    "llm_provider": "local",
+    "fallback_chain": [
+      "local",
+      "zhipu",
+      "minimax"
+    ],
+    "task_type": "deferred_prompt"
+  },
+  {
+    "id": "deferred-1779109100",
+    "created_at": "2026-05-18T12:58:20Z",
+    "status": "pending",
+    "prompt": "目录结构整理，问题：1. 现在APP下面乱建目录；2. 各种deploy脚本随意放；3.各种data目录和db随意放；4._local目录不知道规范，哪儿都有，conclusion下放_local,conclusion/_local下还有conclusion；5.临时文件到处乱放；6. e2e和playwright的文件到处都有，不知道都是干什么用的；7.design目录是放项目设计和prd文档的，需求规划生成的prd也往这下面放。目标要求：1. 整治APP目录结构，清晰简洁，这下面不要再有design、conclusion，现在deployable版本的目录结构还可以；2.所有数据库资料都合并到APP/data下（KB原始资料库除外，但kb的db应该也进去，KB目录仅原始文件、索引、编译文本等非db内容）；3. deploy脚本统一目录，下设不同分支（private-对应mini/public-对应qcl/dist-对应deployable）的子目录；4. 测试所有内容统一到APP/e2e中，可以根据脚本、用例、程序分子目录；5. 统一_local目录到项目根目录下，下设（private-对应mini，public-对应qcl，dist对应deployable）；6.程序生成内容严格都在conclusion下，下设tmp、req-pool、requirement对应临时文件和不同服务模块的产出物。帮我派出一个督查Agent使用grill-me技能好好审查项目目录结构，发现更多问题和应该建立的规范，统统整理出来并多论讨论形成规范，形成规范后起一个worktree做新结构整理，验证完毕无问题后合并到main\n",
+    "llm_provider": "local",
+    "fallback_chain": [
+      "local",
+      "zhipu",
+      "minimax"
+    ],
+    "task_type": "deferred_prompt"
+  },
+  {
+    "id": "deferred-1779109109",
+    "created_at": "2026-05-18T12:58:29Z",
+    "status": "pending",
+    "prompt": "目录结构整理，问题：1. 现在APP下面乱建目录；2. 各种deploy脚本随意放；3.各种data目录和db随意放；4._local目录不知道规范，哪儿都有，conclusion下放_local,conclusion/_local下还有conclusion；5.临时文件到处乱放；6. e2e和playwright的文件到处都有，不知道都是干什么用的；7.design目录是放项目设计和prd文档的，需求规划生成的prd也往这下面放。目标要求：1. 整治APP目录结构，清晰简洁，这下面不要再有design、conclusion，现在deployable版本的目录结构还可以；2.所有数据库资料都合并到APP/data下（KB原始资料库除外，但kb的db应该也进去，KB目录仅原始文件、索引、编译文本等非db内容）；3. deploy脚本统一目录，下设不同分支（private-对应mini/public-对应qcl/dist-对应deployable）的子目录；4. 测试所有内容统一到APP/e2e中，可以根据脚本、用例、程序分子目录；5. 统一_local目录到项目根目录下，下设（private-对应mini，public-对应qcl，dist对应deployable）；6.程序生成内容严格都在conclusion下，下设tmp、req-pool、requirement对应临时文件和不同服务模块的产出物。帮我派出一个督查Agent使用grill-me技能好好审查项目目录结构，发现更多问题和应该建立的规范，统统整理出来并多论讨论形成规范，形成规范后起一个worktree做新结构整理，验证完毕无问题后合并到main。SDD驱动\n",
+    "llm_provider": "local",
+    "fallback_chain": [
+      "local",
+      "zhipu",
+      "minimax"
+    ],
+    "task_type": "deferred_prompt"
+  },
+  {
+    "id": "deferred-1779118263",
+    "created_at": "2026-05-18T15:31:03Z",
+    "status": "pending",
+    "prompt": "完成后检查：所有夜间任务情况，特别是和智能回复、训练器相关的任务，让jobmaster使用grill-me技能并组织agent军团监督目标指标和相关数据进一步完善、质量提升\n",
+    "llm_provider": "local",
+    "fallback_chain": [
+      "local",
+      "zhipu",
+      "minimax"
+    ],
+    "task_type": "deferred_prompt"
+  },
+  {
+    "id": "deferred-1779157678",
+    "created_at": "2026-05-19T02:27:58Z",
+    "status": "pending",
+    "prompt": "分析下，我现在需要的多用户使用不同的自己本地的jira会话和pm回话，加上管理员使用mini主机会话，这几个场景的数据和多方并行的效果推演一下\n",
+    "llm_provider": "local",
+    "fallback_chain": [
+      "local",
+      "zhipu",
+      "minimax"
+    ],
+    "task_type": "deferred_prompt"
+  },
+  {
+    "id": "deferred-1779181000",
+    "created_at": "2026-05-19T08:56:40Z",
+    "status": "pending",
+    "prompt": "完成后，帮我说明解释清楚现在是如何实现防范程序、LLM随意创建文件和目录，如何让它们创建到对的地方的，推演分析的同时讲解下\n",
+    "llm_provider": "local",
+    "fallback_chain": [
+      "local",
+      "zhipu",
+      "minimax"
+    ],
+    "task_type": "deferred_prompt"
+  }
+]

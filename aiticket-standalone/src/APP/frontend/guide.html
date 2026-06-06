@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>操作指引 - AI工单智能助手</title>
+    <link rel="stylesheet" href="/assets/ds/tokens.css">
+    <link rel="stylesheet" href="/assets/ds/base.css">
+    <link rel="stylesheet" href="/assets/ds/components.css">
+    <link rel="stylesheet" href="/assets/ds/command-palette.css">
+    <link rel="stylesheet" href="/assets/responsive.css">
+    <script src="/assets/vendor/tailwind-browser.min.js"></script>
+    <style>
+        .main-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .card {
+            background: var(--ds-bg-surface);
+            border: 1px solid var(--ds-border);
+            border-radius: var(--ds-radius-lg);
+            box-shadow: var(--ds-shadow-sm);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .card:hover {
+            box-shadow: var(--ds-shadow-md);
+        }
+
+        .card-header {
+            background: var(--ds-bg-surface);
+            border-bottom: 1px solid var(--ds-border);
+            font-weight: 600;
+            padding: 16px 20px;
+            border-radius: var(--ds-radius-lg) var(--ds-radius-lg) 0 0 !important;
+            color: var(--ds-text-primary);
+        }
+
+        .upload-zone {
+            border: 2px dashed var(--ds-border);
+            border-radius: var(--ds-radius-lg);
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: var(--ds-bg-muted);
+        }
+
+        .upload-zone:hover {
+            border-color: var(--ds-accent);
+            background: var(--ds-accent-subtle);
+        }
+
+        .upload-zone.dragover {
+            border-color: var(--ds-accent);
+            background: var(--ds-accent-subtle);
+        }
+
+        .upload-icon {
+            font-size: 48px;
+            color: var(--ds-text-muted);
+            margin-bottom: 16px;
+        }
+
+        .preview-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            margin-top: 20px;
+        }
+
+        .preview-item {
+            position: relative;
+            width: 200px;
+            height: 150px;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .preview-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .preview-item .remove-btn {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background: rgba(220, 53, 69, 0.9);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 28px;
+            height: 28px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .guide-result {
+            margin-top: 24px;
+        }
+
+        .step-item {
+            display: flex;
+            align-items: flex-start;
+            padding: 16px;
+            border-radius: var(--ds-radius-md);
+            margin-bottom: 12px;
+            background: var(--ds-bg-surface);
+            border-left: 4px solid var(--ds-accent);
+        }
+
+        .step-number {
+            width: 36px;
+            height: 36px;
+            background: var(--ds-accent);
+            color: var(--ds-text-inverse);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            margin-right: 16px;
+            flex-shrink: 0;
+        }
+
+        .step-content {
+            flex: 1;
+        }
+
+        .step-action {
+            font-size: 12px;
+            color: var(--secondary-color);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+        }
+
+        .step-tip {
+            font-size: 15px;
+            color: #333;
+        }
+
+        .annotated-image {
+            max-width: 100%;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-top: 16px;
+        }
+
+        .env-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .env-badge.public {
+            background: #E8F5E9;
+            color: #2E7D32;
+        }
+
+        .env-badge.dedicated {
+            background: #E3F2FD;
+            color: #1565C0;
+        }
+
+        .env-badge.private {
+            background: #FFF3E0;
+            color: #E65100;
+        }
+
+        .scenario-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+        }
+
+        .scenario-card h5 {
+            margin-bottom: 8px;
+        }
+
+        .confidence-bar {
+            height: 6px;
+            background: rgba(255,255,255,0.3);
+            border-radius: 3px;
+            overflow: hidden;
+            margin-top: 8px;
+        }
+
+        .confidence-fill {
+            height: 100%;
+            background: white;
+            border-radius: 3px;
+            transition: width 0.5s ease;
+        }
+
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255,255,255,0.9);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        }
+        [data-theme="dark"] .loading-overlay {
+            background: rgba(12,17,27,0.9);
+        }
+
+        .loading-content {
+            text-align: center;
+            color: var(--ds-text-primary);
+        }
+
+        .spinner {
+            width: 48px;
+            height: 48px;
+            border: 4px solid var(--ds-border);
+            border-top-color: var(--ds-accent);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Bootstrap兼容: 用DS token替代Bootstrap变量 */
+        .card-body { padding: 16px 20px; }
+        .mb-2 { margin-bottom: 0.5rem; }
+        .mb-3 { margin-bottom: 0.75rem; }
+        .mb-4 { margin-bottom: 1rem; }
+        .mb-0 { margin-bottom: 0; }
+        .mt-4 { margin-top: 1rem; }
+        .ms-2 { margin-left: 0.5rem; }
+        .me-1 { margin-right: 0.25rem; }
+        .me-2 { margin-right: 0.5rem; }
+        .row { display: flex; flex-wrap: wrap; margin: 0 -0.5rem; }
+        .col-md-4, .col-md-6, .col-md-8, .col-lg-6 { padding: 0 0.5rem; box-sizing: border-box; }
+        .col-lg-6 { width: 50%; }
+        .col-md-4 { width: 33.333%; }
+        .col-md-6 { width: 50%; }
+        .col-md-8 { width: 66.667%; }
+        .align-items-center { align-items: center; }
+        .text-end { text-align: right; }
+        .text-center { text-align: center; }
+        .text-muted { color: var(--ds-text-muted); }
+        .d-flex { display: flex; }
+        .justify-content-between { justify-content: space-between; }
+        .form-label { display: block; font-size: var(--ds-text-sm); font-weight: 500; color: var(--ds-text-secondary); margin-bottom: 0.25rem; }
+        .form-control, .form-select { display: block; width: 100%; padding: 0.5rem 0.75rem; font-size: var(--ds-text-base); color: var(--ds-text-primary); background: var(--ds-bg-surface); border: 1px solid var(--ds-border); border-radius: var(--ds-radius-md); outline: none; }
+        .form-control:focus, .form-select:focus { border-color: var(--ds-accent); box-shadow: 0 0 0 3px var(--ds-accent-subtle); }
+        .btn { display: inline-flex; align-items: center; justify-content: center; padding: 0.5rem 1rem; font-size: var(--ds-text-sm); font-weight: 500; border-radius: var(--ds-radius-md); cursor: pointer; border: 1px solid transparent; transition: all 150ms; }
+        .btn-primary { background: var(--ds-accent); color: white; }
+        .btn-primary:hover { background: var(--ds-accent-hover); }
+        .btn-outline-primary { background: transparent; color: var(--ds-accent-text); border-color: var(--ds-accent); }
+        .btn-outline-primary:hover { background: var(--ds-accent-subtle); }
+        .btn-outline-secondary { background: transparent; color: var(--ds-text-secondary); border-color: var(--ds-border); }
+        .btn-outline-secondary:hover { background: var(--ds-bg-muted); }
+        .btn-lg { padding: 0.75rem 1.5rem; font-size: 1rem; }
+        .btn-sm { padding: 0.25rem 0.5rem; font-size: var(--ds-text-xs); }
+        .px-5 { padding-left: 2rem; padding-right: 2rem; }
+        @media (max-width: 767px) {
+            .col-lg-6 { width: 100%; }
+            .col-md-4, .col-md-6, .col-md-8 { width: 100%; }
+        }
+
+        .issue-info {
+            background: var(--ds-accent-subtle);
+            border-radius: var(--ds-radius-md);
+            padding: 16px;
+            margin-bottom: 20px;
+        }
+
+        .issue-key {
+            font-family: var(--ds-font-mono);
+            background: var(--ds-bg-surface);
+            padding: 2px 8px;
+            border-radius: 4px;
+            color: var(--ds-accent-text);
+        }
+
+        .toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 10000;
+        }
+
+        .text-guide {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            margin-top: 20px;
+        }
+
+        .text-guide h4 {
+            color: var(--ds-accent-text);
+            margin-bottom: 16px;
+        }
+
+        .text-guide ol {
+            padding-left: 20px;
+        }
+
+        .text-guide li {
+            margin-bottom: 12px;
+            padding-left: 8px;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--secondary-color);
+        }
+
+        .empty-state i {
+            font-size: 64px;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+
+        /* 响应式 */
+        @media (max-width: 768px) {
+            .preview-item {
+                width: calc(50% - 8px);
+            }
+
+            .step-item {
+                flex-direction: column;
+            }
+
+            .step-number {
+                margin-bottom: 12px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- 侧边栏 -->
+    <aside id="ds-sidebar" class="ds-sidebar"></aside>
+    <div id="ds-sidebar-overlay" class="ds-sidebar-overlay"></div>
+
+    <!-- 主内容区 -->
+    <div id="ds-main" class="ds-main">
+        <!-- 页面头部 -->
+        <div class="ds-page-header">
+            <div class="ds-page-header-left">
+                <button class="ds-hamburger" onclick="DSSidebar.open()">
+                    <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+                </button>
+                <h1 class="ds-page-title">操作指引</h1>
+                <nav class="ds-breadcrumb ds-hide-mobile">
+                    <span class="ds-breadcrumb-sep"></span>
+                    <span class="ds-breadcrumb-current">操作指引生成器</span>
+                </nav>
+            </div>
+        </div>
+
+        <div class="main-container">
+        <!-- 工单信息 -->
+        <div class="card mb-4">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col-md-8">
+                        <h5 class="mb-2">操作指引生成器</h5>
+                        <p class="text-muted mb-0">上传您的系统截图，AI将自动生成操作引导</p>
+                    </div>
+                    <div class="col-md-4 text-end">
+                        <span class="env-badge private" id="envBadge">
+                            <i class="bi bi-cloud me-1"></i>
+                            <span id="envText">检测中...</span>
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 输入区域 -->
+        <div class="row">
+            <div class="col-lg-6">
+                <!-- 工单信息输入 -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <i class="bi bi-ticket-perforated me-2"></i>工单信息
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label">工单编号</label>
+                            <input type="text" class="form-control" id="issueKey"
+                                   placeholder="例如：MYPROJECT-59031">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">问题简述</label>
+                            <input type="text" class="form-control" id="issueSummary"
+                                   placeholder="例如：如何添加审批节点">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">详细描述</label>
+                            <textarea class="form-control" id="issueDescription" rows="3"
+                                      placeholder="请描述您遇到的问题和想要完成的操作..."></textarea>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <label class="form-label">部署类型</label>
+                                <select class="form-select" id="deploymentType">
+                                    <option value="private">私有云</option>
+                                    <option value="dedicated">专属云</option>
+                                    <option value="public">公有云</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">系统版本</label>
+                                <input type="text" class="form-control" id="systemVersion"
+                                       placeholder="例如：3.5.2">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 截图上传 -->
+                <div class="card">
+                    <div class="card-header">
+                        <i class="bi bi-image me-2"></i>上传截图
+                    </div>
+                    <div class="card-body">
+                        <div class="upload-zone" id="uploadZone">
+                            <div class="upload-icon">
+                                <i class="bi bi-cloud-upload"></i>
+                            </div>
+                            <h5>拖拽截图到这里</h5>
+                            <p class="text-muted mb-2">或者点击选择文件</p>
+                            <small class="text-muted">支持 PNG, JPG, JPEG 格式</small>
+                            <input type="file" id="fileInput" accept="image/*" multiple hidden>
+                        </div>
+                        <div class="preview-container" id="previewContainer"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-6">
+                <!-- 结果展示区 -->
+                <div class="card" id="resultCard" style="display: none;">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span><i class="bi bi-lightbulb me-2"></i>操作指引</span>
+                        <button class="btn btn-sm btn-outline-primary" onclick="copyGuide()">
+                            <i class="bi bi-clipboard me-1"></i>复制
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        <!-- 场景识别结果 -->
+                        <div class="scenario-card" id="scenarioCard" style="display: none;">
+                            <h5 id="scenarioName">识别中...</h5>
+                            <p class="mb-0">匹配度</p>
+                            <div class="confidence-bar">
+                                <div class="confidence-fill" id="confidenceFill" style="width: 0%"></div>
+                            </div>
+                        </div>
+
+                        <!-- 步骤列表 -->
+                        <div id="stepsContainer"></div>
+
+                        <!-- 文字引导 -->
+                        <div class="text-guide" id="textGuide" style="display: none;"></div>
+
+                        <!-- 标注图片 -->
+                        <div id="annotatedImages"></div>
+                    </div>
+                </div>
+
+                <!-- 空状态 -->
+                <div class="card" id="emptyCard">
+                    <div class="empty-state">
+                        <i class="bi bi-lightbulb"></i>
+                        <h5>准备生成操作指引</h5>
+                        <p>填写工单信息并上传截图，点击下方按钮生成指引</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 操作按钮 -->
+        <div class="text-center mt-4">
+            <button class="btn btn-primary btn-lg px-5" id="generateBtn" onclick="generateGuide()">
+                <i class="bi bi-magic me-2"></i>生成操作指引
+            </button>
+            <button class="btn btn-outline-secondary btn-lg px-5 ms-2" onclick="clearAll()">
+                <i class="bi bi-x-circle me-2"></i>清空
+            </button>
+        </div>
+    </div>
+
+    <!-- 加载遮罩 -->
+    <div class="loading-overlay" id="loadingOverlay" style="display: none;">
+        <div class="loading-content">
+            <div class="spinner" style="margin:0 auto 12px"></div>
+            <h5>正在生成操作指引...</h5>
+            <p style="color:var(--ds-text-muted)">AI正在分析您的截图和问题</p>
+        </div>
+    </div>
+
+    </div><!-- end ds-main -->
+
+    <script src="/assets/common.js"></script>
+    <script src="/assets/ds/theme.js"></script>
+    <script src="/assets/ds/sidebar.js"></script>
+    <script src="/assets/project-context.js"></script>
+  <script src="/assets/nav.js"></script>
+    <script src="/assets/ds/command-palette.js"></script>
+    <script>
+        // 全局变量
+        let uploadedImages = [];
+        const API_BASE = getApiBase();
+
+        // 初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            initUploadZone();
+            checkEnvironment();
+
+            // 从URL参数获取工单信息
+            const urlParams = new URLSearchParams(window.location.search);
+            const issueKey = urlParams.get('issue_key');
+            const summary = urlParams.get('summary');
+
+            if (issueKey) {
+                document.getElementById('issueKey').value = issueKey;
+            }
+            if (summary) {
+                document.getElementById('issueSummary').value = decodeURIComponent(summary);
+            }
+        });
+
+        // 初始化上传区域
+        function initUploadZone() {
+            const uploadZone = document.getElementById('uploadZone');
+            const fileInput = document.getElementById('fileInput');
+
+            // 点击上传
+            uploadZone.addEventListener('click', () => fileInput.click());
+
+            // 拖拽上传
+            uploadZone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                uploadZone.classList.add('dragover');
+            });
+
+            uploadZone.addEventListener('dragleave', () => {
+                uploadZone.classList.remove('dragover');
+            });
+
+            uploadZone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                uploadZone.classList.remove('dragover');
+                handleFiles(e.dataTransfer.files);
+            });
+
+            // 文件选择
+            fileInput.addEventListener('change', (e) => {
+                handleFiles(e.target.files);
+            });
+        }
+
+        // 处理文件
+        function handleFiles(files) {
+            for (const file of files) {
+                if (!file.type.startsWith('image/')) {
+                    showToast('请上传图片文件', 'warning');
+                    continue;
+                }
+
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const base64 = e.target.result;
+                    uploadedImages.push({
+                        name: file.name,
+                        data: base64,
+                        size: file.size
+                    });
+                    updatePreview();
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        // 更新预览
+        function updatePreview() {
+            const container = document.getElementById('previewContainer');
+            container.innerHTML = '';
+
+            uploadedImages.forEach((img, index) => {
+                const item = document.createElement('div');
+                item.className = 'preview-item';
+                item.innerHTML = `
+                    <img src="${img.data}" alt="${img.name}">
+                    <button class="remove-btn" onclick="removeImage(${index})">
+                        <i class="bi bi-x"></i>
+                    </button>
+                `;
+                container.appendChild(item);
+            });
+        }
+
+        // 移除图片
+        function removeImage(index) {
+            uploadedImages.splice(index, 1);
+            updatePreview();
+        }
+
+        // 检查环境
+        async function checkEnvironment() {
+            const deploymentType = document.getElementById('deploymentType').value;
+            updateEnvBadge(deploymentType);
+
+            document.getElementById('deploymentType').addEventListener('change', (e) => {
+                updateEnvBadge(e.target.value);
+            });
+        }
+
+        // 更新环境徽章
+        function updateEnvBadge(type) {
+            const badge = document.getElementById('envBadge');
+            const text = document.getElementById('envText');
+
+            const configs = {
+                'public': { class: 'public', text: '公有云', icon: 'cloud-check' },
+                'dedicated': { class: 'dedicated', text: '专属云', icon: 'cloud' },
+                'private': { class: 'private', text: '私有云', icon: 'cloud-slash' }
+            };
+
+            const config = configs[type] || configs['private'];
+            badge.className = `env-badge ${config.class}`;
+            badge.innerHTML = `<i class="bi bi-${config.icon} me-1"></i><span>${config.text}</span>`;
+        }
+
+        // 生成引导
+        async function generateGuide() {
+            const issueKey = document.getElementById('issueKey').value.trim();
+            const summary = document.getElementById('issueSummary').value.trim();
+            const description = document.getElementById('issueDescription').value.trim();
+            const deploymentType = document.getElementById('deploymentType').value;
+            const systemVersion = document.getElementById('systemVersion').value.trim();
+
+            if (!summary) {
+                showToast('请输入问题简述', 'warning');
+                return;
+            }
+
+            // 显示加载
+            document.getElementById('loadingOverlay').style.display = 'flex';
+
+            try {
+                const response = await fetch(`${API_BASE}/api/guide/generate`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        issue_key: issueKey || 'UNKNOWN',
+                        issue_summary: summary,
+                        issue_description: description,
+                        tenant_info: {
+                            deployment_type: deploymentType,
+                            system_version: systemVersion || 'unknown'
+                        },
+                        screenshots: uploadedImages.map(img => img.data.split(',')[1]) // 去掉data:image/xxx;base64,前缀
+                    })
+                });
+
+                const result = await response.json();
+
+                if (result.status === 'success' || result.status === 'partial') {
+                    displayResult(result);
+                    showToast('操作指引生成成功', 'success');
+                } else {
+                    showToast('生成失败: ' + result.error_message, 'danger');
+                }
+
+            } catch (error) {
+                console.error('生成失败:', error);
+                showToast('生成失败，请稍后重试', 'danger');
+            } finally {
+                document.getElementById('loadingOverlay').style.display = 'none';
+            }
+        }
+
+        // 显示结果
+        function displayResult(result) {
+            document.getElementById('emptyCard').style.display = 'none';
+            document.getElementById('resultCard').style.display = 'block';
+
+            // 显示场景识别
+            if (result.matched_scenario) {
+                document.getElementById('scenarioCard').style.display = 'block';
+                document.getElementById('scenarioName').textContent = result.matched_scenario;
+                document.getElementById('confidenceFill').style.width = `${result.scenario_confidence * 100}%`;
+            } else {
+                document.getElementById('scenarioCard').style.display = 'none';
+            }
+
+            // 显示步骤
+            const stepsContainer = document.getElementById('stepsContainer');
+            stepsContainer.innerHTML = '';
+
+            result.steps.forEach((step, index) => {
+                const actionIcons = {
+                    'click': 'bi-cursor',
+                    'input': 'bi-keyboard',
+                    'select': 'bi-list',
+                    'navigate': 'bi-compass',
+                    'drag': 'bi-arrows-move',
+                    'config': 'bi-gear',
+                    'identify': 'bi-search',
+                    'confirm': 'bi-check-circle'
+                };
+
+                const icon = actionIcons[step.action] || 'bi-arrow-right';
+
+                const stepEl = document.createElement('div');
+                stepEl.className = 'step-item';
+                stepEl.innerHTML = `
+                    <div class="step-number">${step.step}</div>
+                    <div class="step-content">
+                        <div class="step-action">${step.action}</div>
+                        <div class="step-tip">
+                            <i class="bi ${icon} me-2"></i>${step.tip}
+                        </div>
+                    </div>
+                `;
+                stepsContainer.appendChild(stepEl);
+            });
+
+            // 显示文字引导
+            if (result.text_guide) {
+                document.getElementById('textGuide').style.display = 'block';
+                document.getElementById('textGuide').innerHTML = result.text_guide;
+            }
+
+            // 显示标注图片
+            const imagesContainer = document.getElementById('annotatedImages');
+            imagesContainer.innerHTML = '';
+
+            if (result.annotated_images && result.annotated_images.length > 0) {
+                result.annotated_images.forEach((img, index) => {
+                    if (img.annotated_image_base64) {
+                        const imgEl = document.createElement('div');
+                        imgEl.className = 'mt-4';
+                        imgEl.innerHTML = `
+                            <h6><i class="bi bi-image me-2"></i>标注图 ${index + 1}</h6>
+                            <img src="data:image/png;base64,${img.annotated_image_base64}"
+                                 class="annotated-image" alt="标注后的截图">
+                        `;
+                        imagesContainer.appendChild(imgEl);
+                    }
+                });
+            }
+        }
+
+        // 复制引导
+        function copyGuide() {
+            const textGuide = document.getElementById('textGuide').innerText;
+            navigator.clipboard.writeText(textGuide).then(() => {
+                showToast('已复制到剪贴板', 'success');
+            }).catch(() => {
+                showToast('复制失败', 'danger');
+            });
+        }
+
+        // 清空所有
+        function clearAll() {
+            document.getElementById('issueKey').value = '';
+            document.getElementById('issueSummary').value = '';
+            document.getElementById('issueDescription').value = '';
+            document.getElementById('systemVersion').value = '';
+            document.getElementById('deploymentType').value = 'private';
+
+            uploadedImages = [];
+            updatePreview();
+
+            document.getElementById('resultCard').style.display = 'none';
+            document.getElementById('emptyCard').style.display = 'block';
+
+            updateEnvBadge('private');
+        }
+
+        // 显示Toast
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toastContainer');
+            const id = 'toast_' + Date.now();
+
+            const bgColors = {
+                'success': 'bg-success',
+                'danger': 'bg-danger',
+                'warning': 'bg-warning',
+                'info': 'bg-info'
+            };
+
+            const toast = document.createElement('div');
+            toast.className = `toast show ${bgColors[type]} text-white`;
+            toast.id = id;
+            toast.innerHTML = `
+                <div class="toast-body">
+                    <i class="bi bi-${type === 'success' ? 'check-circle' : type === 'danger' ? 'x-circle' : 'info-circle'} me-2"></i>
+                    ${message}
+                </div>
+            `;
+
+            container.appendChild(toast);
+
+            setTimeout(() => {
+                toast.remove();
+            }, 3000);
+        }
+    </script>
+    <script src="/assets/scope-switcher.js"></script>
+    <script>ScopeSwitcher.init();</script>
+</body>
+</html>

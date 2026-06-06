@@ -1,0 +1,169 @@
+/* ── DS Kanban ─────────────────────────────────────────────
+   看板组件样式，board.html 等页面共用
+   ────────────────────────────────────────────────────── */
+
+/* 容器 */
+.ds-kanban {
+  display: flex;
+  gap: var(--ds-space-4);
+  height: 100%;
+  overflow-x: auto;
+  padding-bottom: var(--ds-space-4);
+}
+
+/* 列 */
+.ds-kanban-col {
+  min-width: 280px;
+  flex: 1;
+  max-width: 340px;
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--ds-radius-lg);
+  background: var(--ds-bg-muted);
+  overflow: hidden;
+  max-height: 100%;
+}
+
+/* 列头 */
+.ds-kanban-col-header {
+  padding: var(--ds-space-3) var(--ds-space-4);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.ds-kanban-col-title {
+  font-size: var(--ds-text-base);
+  font-weight: var(--ds-font-semibold);
+  color: var(--ds-text-primary);
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+}
+
+/* 计数徽章 */
+.ds-kanban-col-count {
+  font-size: var(--ds-text-xs);
+  font-weight: var(--ds-font-semibold);
+  color: var(--ds-text-muted);
+  background: var(--ds-bg-surface);
+  border-radius: var(--ds-radius-full);
+  min-width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 6px;
+}
+
+/* 列表区 */
+.ds-kanban-col-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--ds-space-2) var(--ds-space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+  min-height: 80px;
+}
+
+/* 状态指示点 */
+.ds-kanban-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--ds-radius-full);
+  flex-shrink: 0;
+}
+
+/* ── 卡片 ── */
+.ds-kanban-card {
+  background: var(--ds-bg-surface);
+  border-radius: var(--ds-radius-md);
+  padding: var(--ds-space-3);
+  cursor: pointer;
+  transition: box-shadow var(--ds-transition-fast), transform var(--ds-transition-fast);
+}
+
+.ds-kanban-card:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--ds-shadow-md);
+}
+
+.ds-kanban-card--selected {
+  box-shadow: 0 0 0 2px var(--ds-accent);
+}
+
+.ds-kanban-card-id {
+  font-size: var(--ds-text-xs);
+  color: var(--ds-text-muted);
+  font-weight: var(--ds-font-medium);
+}
+
+.ds-kanban-card-title {
+  font-size: var(--ds-text-sm);
+  font-weight: var(--ds-font-medium);
+  color: var(--ds-text-primary);
+  line-height: var(--ds-leading-normal);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin-top: 2px;
+}
+
+.ds-kanban-card-meta {
+  font-size: var(--ds-text-xs);
+  color: var(--ds-text-muted);
+  margin-top: var(--ds-space-2);
+}
+
+.ds-kanban-card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: var(--ds-space-2);
+}
+
+.ds-kanban-card-tag {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: var(--ds-radius-full);
+  font-weight: var(--ds-font-medium);
+}
+
+/* ── 拖拽 ── */
+.sortable-ghost { opacity: 0.4; }
+.sortable-drag  { cursor: grabbing !important; }
+
+/* ── 空状态 ── */
+.ds-kanban-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--ds-space-10) var(--ds-space-6);
+  color: var(--ds-text-muted);
+  text-align: center;
+}
+.ds-kanban-empty svg { margin-bottom: var(--ds-space-4); }
+.ds-kanban-empty p   { margin-bottom: var(--ds-space-2); }
+
+/* ── 分析中脉冲 ── */
+@keyframes kanban-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.5; }
+}
+.ds-kanban-card-pulse {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: var(--ds-radius-full);
+  background: var(--ds-info-subtle);
+  color: var(--ds-info-text);
+  animation: kanban-pulse 2s infinite;
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: var(--ds-font-semibold);
+}

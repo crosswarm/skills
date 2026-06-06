@@ -82,14 +82,11 @@ def obtain_src(home: Path, src: str | None, repo: str, branch: str, force: bool)
         abs_src = Path(src).expanduser().resolve()
         if not (abs_src / "APP" / "backend" / "main.py").exists():
             raise SystemExit(f"✗ --src 不是有效 checkout（缺 APP/backend/main.py）：{abs_src}")
-        try:
-            os.symlink(abs_src, dst, target_is_directory=True)
-            print(f"  ✓ 符号链接 {dst} → {abs_src}")
-        except (OSError, NotImplementedError):
-            print("  ⚠ 符号链接失败，改为复制（较慢）")
-            shutil.copytree(abs_src, dst, ignore=shutil.ignore_patterns(
-                ".git", ".venv*", "__pycache__", "node_modules", "data", "*.log"))
-            print(f"  ✓ 复制完成 {dst}")
+        # 复制源码（独立安装，避免运行期数据写回 skill 目录 / 符号链接失效）
+        shutil.copytree(abs_src, dst, ignore=shutil.ignore_patterns(
+            ".git", ".venv*", "__pycache__", "node_modules", "data", "*.log",
+            "*.db", "*.db-shm", "*.db-wal", "*.key"))
+        print(f"  ✓ 复制源码 {dst}（来自 {abs_src}）")
     else:
         _run(["git", "clone", "--depth", "1", "-b", branch, repo, str(dst)])
         print(f"  ✓ 克隆完成 {dst}")
@@ -267,6 +264,13 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     home = Path(args.home).expanduser() if args.home else P.default_home()
     port = P.resolve_port(home, override=args.port)
+
+    # 发布版：tools/ 同级若有 bundled 源码（git archive 出的 APP/），默认用它免 clone
+    if not args.src:
+        _bundled = Path(__file__).resolve().parent.parent / "src"
+        if (_bundled / "APP" / "backend" / "main.py").exists():
+            args.src = str(_bundled)
+            print(f"[install] 使用随 skill 打包的源码（免 clone）：{_bundled}")
 
     print(f"aiticket compact 安装 · HOME={home} · 端口={port}")
     make_layout(home)

@@ -1,0 +1,22 @@
+name: omc_web_research_specialist
+display_name: '[OMC] web-research-specialist'
+personality: 'OMC subagent: web-research-specialist'
+behavioral_guidelines:
+- 遵循 OMC web-research-specialist 的角色定义执行任务
+- 任务完成后向父 agent 报告结果
+tool_chain:
+- omc_dispatch
+memory_write_trigger: never
+memory_write_scope: none
+memory_write_template: null
+id: b17723a4-791a-44c7-83e8-2e1230820174
+version: '1.0'
+hidden: true
+parent_agent: claude
+kind: omc_subagent
+triggerable_via: parent_only
+source_md: /Users/cfone/Studio/aiticket/.claude/agents/web-research-specialist.md
+omc_subagent_type: oh-my-claudecode:web-research-specialist
+tags:
+- omc
+- web-research-specialist

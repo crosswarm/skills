@@ -1,0 +1,23 @@
+{
+  "id": "daily-kb-incremental-sync",
+  "name": "每日 product_facts 增量重索引",
+  "task_type": "script",
+  "trigger_type": "cron",
+  "cron": "15 4 * * *",
+  "enabled": true,
+  "catchup_window_hours": 2,
+  "cooldown_hours": 0,
+  "command": [
+    "__PYTHON__",
+    "product_facts_indexer.py"
+  ],
+  "description": "每日04:15：检查 product_facts.md mtime 变化，有更新才重索引（省资源）",
+  "last_run": null,
+  "created_at": "2026-05-12T09:00:00",
+  "run_count": 0,
+  "last_status": "unknown",
+  "created_by": "claude",
+  "created_by_uuid": "aaac6ff8-d4a6-ce54-1d0b-0538426b0028",
+  "schema_version": "1.0",
+  "agent_hint": "kb_fact"
+}

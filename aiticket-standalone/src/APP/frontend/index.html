@@ -1,0 +1,969 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 工单智能分析系统</title>
+    <link rel="stylesheet" href="/assets/responsive.css">
+    <link rel="stylesheet" href="/assets/ds/tokens.css">
+    <link rel="stylesheet" href="/assets/ds/base.css">
+    <link rel="stylesheet" href="/assets/ds/components.css">
+    <link rel="stylesheet" href="/assets/ds/command-palette.css">
+    <script src="/assets/vendor/tailwind-browser.min.js"></script>
+    <!-- Early fallback detection -->
+    <script>
+        (function() {
+            window.addEventListener('load', function() {
+                if (typeof window.tailwind === 'undefined') {
+                    console.error('[Index] Tailwind CSS failed to load from local vendor bundle');
+                    document.documentElement.classList.add('tailwind-fallback');
+                }
+            });
+        })();
+    </script>
+    <style>
+        /* System font stack fallback */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        }
+
+        /* Critical CSS - Inline minimal Tailwind-like styles */
+        .w-4 { width: 1rem !important; }
+        .h-4 { height: 1rem !important; }
+        .w-5 { width: 1.25rem !important; }
+        .h-5 { height: 1.25rem !important; }
+        .w-6 { width: 1.5rem !important; }
+        .h-6 { height: 1.5rem !important; }
+        .w-8 { width: 2rem !important; }
+        .h-8 { height: 2rem !important; }
+        svg { max-width: 100% !important; height: auto !important; }
+
+        /* Comprehensive Tailwind fallback classes */
+        .tailwind-fallback .w-full { width: 100%; }
+        .tailwind-fallback .h-full { height: 100%; }
+        .tailwind-fallback .min-h-screen { min-height: 100vh; }
+        .tailwind-fallback .flex { display: flex; }
+        .tailwind-fallback .flex-col { flex-direction: column; }
+        .tailwind-fallback .flex-wrap { flex-wrap: wrap; }
+        .tailwind-fallback .items-center { align-items: center; }
+        .tailwind-fallback .justify-center { justify-content: center; }
+        .tailwind-fallback .justify-between { justify-content: space-between; }
+        .tailwind-fallback .justify-end { justify-content: flex-end; }
+        .tailwind-fallback .gap-1 { gap: 0.25rem; }
+        .tailwind-fallback .gap-2 { gap: 0.5rem; }
+        .tailwind-fallback .gap-3 { gap: 0.75rem; }
+        .tailwind-fallback .gap-4 { gap: 1rem; }
+        .tailwind-fallback .p-2 { padding: 0.5rem; }
+        .tailwind-fallback .p-3 { padding: 0.75rem; }
+        .tailwind-fallback .p-4 { padding: 1rem; }
+        .tailwind-fallback .p-6 { padding: 1.5rem; }
+        .tailwind-fallback .p-8 { padding: 2rem; }
+        .tailwind-fallback .px-2 { padding-left: 0.5rem; padding-right: 0.5rem; }
+        .tailwind-fallback .px-3 { padding-left: 0.75rem; padding-right: 0.75rem; }
+        .tailwind-fallback .px-4 { padding-left: 1rem; padding-right: 1rem; }
+        .tailwind-fallback .px-6 { padding-left: 1.5rem; padding-right: 1.5rem; }
+        .tailwind-fallback .py-1 { padding-top: 0.25rem; padding-bottom: 0.25rem; }
+        .tailwind-fallback .py-2 { padding-top: 0.5rem; padding-bottom: 0.5rem; }
+        .tailwind-fallback .py-3 { padding-top: 0.75rem; padding-bottom: 0.75rem; }
+        .tailwind-fallback .py-4 { padding-top: 1rem; padding-bottom: 1rem; }
+        .tailwind-fallback .py-12 { padding-top: 3rem; padding-bottom: 3rem; }
+        .tailwind-fallback .m-2 { margin: 0.5rem; }
+        .tailwind-fallback .m-3 { margin: 0.75rem; }
+        .tailwind-fallback .m-4 { margin: 1rem; }
+        .tailwind-fallback .mb-1 { margin-bottom: 0.25rem; }
+        .tailwind-fallback .mb-2 { margin-bottom: 0.5rem; }
+        .tailwind-fallback .mb-3 { margin-bottom: 0.75rem; }
+        .tailwind-fallback .mb-4 { margin-bottom: 1rem; }
+        .tailwind-fallback .mb-6 { margin-bottom: 1.5rem; }
+        .tailwind-fallback .mt-2 { margin-top: 0.5rem; }
+        .tailwind-fallback .mt-3 { margin-top: 0.75rem; }
+        .tailwind-fallback .mt-4 { margin-top: 1rem; }
+        .tailwind-fallback .mt-6 { margin-top: 1.5rem; }
+        .tailwind-fallback .mr-2 { margin-right: 0.5rem; }
+        .tailwind-fallback .mr-3 { margin-right: 0.75rem; }
+        .tailwind-fallback .ml-2 { margin-left: 0.5rem; }
+        .tailwind-fallback .ml-3 { margin-left: 0.75rem; }
+        .tailwind-fallback .mx-auto { margin-left: auto; margin-right: auto; }
+        .tailwind-fallback .space-y-2 > * + * { margin-top: 0.5rem; }
+        .tailwind-fallback .space-y-3 > * + * { margin-top: 0.75rem; }
+        .tailwind-fallback .space-y-4 > * + * { margin-top: 1rem; }
+        .tailwind-fallback .space-x-2 > * + * { margin-left: 0.5rem; }
+        .tailwind-fallback .space-x-3 > * + * { margin-left: 0.75rem; }
+        .tailwind-fallback .text-xs { font-size: 0.75rem; }
+        .tailwind-fallback .text-sm { font-size: 0.875rem; }
+        .tailwind-fallback .text-base { font-size: 1rem; }
+        .tailwind-fallback .text-lg { font-size: 1.125rem; }
+        .tailwind-fallback .text-xl { font-size: 1.25rem; }
+        .tailwind-fallback .text-2xl { font-size: 1.5rem; }
+        .tailwind-fallback .text-4xl { font-size: 2.25rem; }
+        .tailwind-fallback .font-light { font-weight: 300; }
+        .tailwind-fallback .font-medium { font-weight: 500; }
+        .tailwind-fallback .font-semibold { font-weight: 600; }
+        .tailwind-fallback .font-bold { font-weight: 700; }
+        .tailwind-fallback .leading-relaxed { line-height: 1.625; }
+        .tailwind-fallback .text-center { text-align: center; }
+        .tailwind-fallback .whitespace-nowrap { white-space: nowrap; }
+        .tailwind-fallback .rounded { border-radius: 0.25rem; }
+        .tailwind-fallback .rounded-lg { border-radius: 0.5rem; }
+        .tailwind-fallback .rounded-xl { border-radius: 0.75rem; }
+        .tailwind-fallback .rounded-2xl { border-radius: 1rem; }
+        .tailwind-fallback .rounded-full { border-radius: 9999px; }
+        .tailwind-fallback .bg-white { background-color: #ffffff; }
+        .tailwind-fallback .bg-slate-50 { background-color: #f8fafc; }
+        .tailwind-fallback .bg-slate-100 { background-color: #f1f5f9; }
+        .tailwind-fallback .bg-slate-200 { background-color: #e2e8f0; }
+        .tailwind-fallback .bg-slate-800 { background-color: #1e293b; }
+        .tailwind-fallback .bg-indigo-50 { background-color: #eef2ff; }
+        .tailwind-fallback .bg-indigo-100 { background-color: #e0e7ff; }
+        .tailwind-fallback .bg-indigo-500 { background-color: #6366f1; }
+        .tailwind-fallback .bg-indigo-600 { background-color: #4f46e5; }
+        .tailwind-fallback .bg-indigo-700 { background-color: #4338ca; }
+        .tailwind-fallback .bg-gradient-to-br { background: linear-gradient(to bottom right, #f8fafc, #e2e8f0); }
+        .tailwind-fallback .text-white { color: #ffffff; }
+        .tailwind-fallback .text-slate-300 { color: #cbd5e1; }
+        .tailwind-fallback .text-slate-400 { color: #94a3b8; }
+        .tailwind-fallback .text-slate-500 { color: #64748b; }
+        .tailwind-fallback .text-slate-600 { color: #475569; }
+        .tailwind-fallback .text-slate-700 { color: #334155; }
+        .tailwind-fallback .text-slate-800 { color: #1e293b; }
+        .tailwind-fallback .text-indigo-200 { color: #c7d2fe; }
+        .tailwind-fallback .text-indigo-600 { color: #4f46e5; }
+        .tailwind-fallback .text-indigo-700 { color: #4338ca; }
+        .tailwind-fallback .hidden { display: none; }
+        .tailwind-fallback .block { display: block; }
+        .tailwind-fallback .inline-block { display: inline-block; }
+        .tailwind-fallback .grid { display: grid; }
+        .tailwind-fallback .border { border-width: 1px; border-style: solid; }
+        .tailwind-fallback .border-2 { border-width: 2px; border-style: solid; }
+        .tailwind-fallback .border-slate-200 { border-color: #e2e8f0; }
+        .tailwind-fallback .border-slate-300 { border-color: #cbd5e1; }
+        .tailwind-fallback .border-indigo-500 { border-color: #6366f1; }
+        .tailwind-fallback .shadow { box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1); }
+        .tailwind-fallback .shadow-lg { box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
+        .tailwind-fallback .shadow-xl { box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1); }
+        .tailwind-fallback .max-w-2xl { max-width: 42rem; }
+        .tailwind-fallback .max-w-5xl { max-width: 64rem; }
+        .tailwind-fallback .max-w-lg { max-width: 32rem; }
+        .tailwind-fallback .relative { position: relative; }
+        .tailwind-fallback .fixed { position: fixed; }
+        .tailwind-fallback .absolute { position: absolute; }
+        .tailwind-fallback .inset-0 { top: 0; right: 0; bottom: 0; left: 0; }
+        .tailwind-fallback .z-50 { z-index: 50; }
+        .tailwind-fallback .overflow-hidden { overflow: hidden; }
+        .tailwind-fallback .overflow-x-auto { overflow-x: auto; }
+        .tailwind-fallback .cursor-pointer { cursor: pointer; }
+        .tailwind-fallback .transition { transition: all 0.2s ease; }
+        .tailwind-fallback .flex-1 { flex: 1 1 0%; }
+        .tailwind-fallback .outline-none { outline: none; }
+        .tailwind-fallback .focus\:ring-2:focus { box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.5); }
+        .tailwind-fallback .hover\:bg-slate-200:hover { background-color: #e2e8f0; }
+        .tailwind-fallback .hover\:bg-indigo-700:hover { background-color: #4338ca; }
+        .tailwind-fallback .hover\:text-slate-700:hover { color: #334155; }
+
+        .glass {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+        }
+
+        .fade-in {
+            animation: fadeIn 0.5s ease-out forwards;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .modal-bg {
+            background-color: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(4px);
+        }
+
+        /* Toast Styles */
+        .toast {
+            position: fixed;
+            bottom: 2rem;
+            left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            opacity: 0;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            z-index: 9999;
+        }
+
+        .toast.show {
+            transform: translateX(-50%) translateY(0);
+            opacity: 1;
+        }
+
+        /* Hide scrollbar but keep functionality */
+        .scrollbar-hide::-webkit-scrollbar {
+            display: none;
+        }
+
+        .scrollbar-hide {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+</head>
+
+<body style="background:var(--ds-bg-page);color:var(--ds-text-primary)">
+
+    <!-- DS Sidebar (unified navigation) -->
+    <aside id="ds-sidebar" class="ds-sidebar"></aside>
+    <div id="ds-sidebar-overlay" class="ds-sidebar-overlay"></div>
+
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="fixed inset-0 modal-bg z-50 hidden flex items-center justify-center fade-in">
+        <div class="rounded-2xl shadow-2xl p-8 max-w-lg w-full mx-4" style="background:var(--ds-bg-surface);color:var(--ds-text-primary)">
+            <h2 class="text-2xl font-bold mb-4">设置</h2>
+
+            <!-- Provider Selection -->
+            <div class="mb-4">
+                <label class="block text-sm font-bold mb-2">模型服务商</label>
+                <select id="providerSelect"
+                    class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                    onchange="handleProviderChange()">
+                    <option value="none">关闭 AI 分析</option>
+                    <option value="gemini">Google Gemini</option>
+                    <option value="deepseek">DeepSeek (OpenAI Compatible)</option>
+                    <option value="zhipu">Zhipu GLM (OpenAI Compatible)</option>
+                    <option value="aliyun">Qwen/Aliyun (OpenAI Compatible)</option>
+                    <option value="minimax">MiniMax (OpenAI Compatible)</option>
+                    <option value="kimi">Kimi K2 (OpenAI Compatible)</option>
+                    <option value="openai">OpenAI / Custom</option>
+                </select>
+            </div>
+
+            <!-- API Key -->
+            <div id="apiKeySection" class="mb-4">
+                <label class="block text-sm font-bold mb-2">API Key</label>
+                <div class="flex gap-2">
+                    <input type="password" id="apiKeyInput"
+                        class="flex-1 p-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                        placeholder="sk-...">
+                    <button onclick="testApiKey()" id="testApiBtn"
+                        class="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition flex items-center gap-2 whitespace-nowrap">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                        测试
+                    </button>
+                </div>
+                <div id="testResult" class="mt-2 text-sm hidden"></div>
+            </div>
+
+            <!-- Advanced Config for OpenAI Compatible -->
+            <div id="advancedConfig" class="hidden space-y-4 mb-4 border-t pt-4">
+                <div>
+                    <label class="block text-sm font-bold mb-2">Model Name</label>
+                    <input type="text" id="modelNameInput"
+                        class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                        placeholder="e.g. deepseek-chat">
+                </div>
+                <div>
+                    <label class="block text-sm font-bold mb-2">Base URL</label>
+                    <input type="text" id="baseUrlInput"
+                        class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                        placeholder="https://api.deepseek.com/v1">
+                </div>
+            </div>
+
+            <p class="text-xs text-slate-500 mt-2">配置仅存储在本地浏览器中。</p>
+
+            <div class="flex justify-end gap-3 mt-6">
+                <button onclick="closeSettings()" class="px-4 py-2 text-slate-500 hover:text-slate-700">取消</button>
+                <button onclick="saveSettings()"
+                    class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="ds-main" class="ds-main">
+    <!-- Page Header -->
+    <div class="ds-page-header">
+        <div class="ds-page-header-left">
+            <button class="ds-hamburger" onclick="DSSidebar.open()">
+                <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+            </button>
+            <h1 class="ds-page-title">问题分析</h1>
+            <nav class="ds-breadcrumb ds-hide-mobile">
+                <span class="ds-breadcrumb-sep"></span>
+                <span class="ds-breadcrumb-current">智能搜索</span>
+            </nav>
+        </div>
+        <div class="ds-page-header-actions">
+            <button onclick="triggerAnalysis()" id="analyzeBtn" class="ds-btn ds-btn-ghost ds-btn-icon ds-btn-sm" title="同步最新数据">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+            </button>
+        </div>
+    </div>
+
+    <!-- Content Area -->
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-12" style="min-height:calc(100vh - var(--ds-header-h))">
+
+        <!-- Search Area -->
+        <div class="flex flex-col items-center mb-8 sm:mb-16 fade-in" style="animation-delay: 0.1s;">
+            <h2
+                class="text-2xl sm:text-4xl font-extrabold mb-4 sm:mb-6 text-center" style="color:var(--ds-accent-text)">
+                遇到什么问题了？
+            </h2>
+            <div class="w-full max-w-2xl relative group">
+                <div
+                    class="absolute -inset-1 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-2xl blur opacity-25 group-hover:opacity-40 transition duration-1000 group-hover:duration-200">
+                </div>
+                <!-- Search Box Container -->
+                <div class="relative rounded-xl shadow-xl overflow-hidden" style="background:var(--ds-bg-surface)">
+                    <!-- Image Preview Area -->
+                    <div id="imagePreviewContainer"
+                        class="hidden px-4 pt-4 flex gap-2 overflow-x-auto pb-2 border-b border-slate-100">
+                        <!-- Images injected here -->
+                    </div>
+
+                    <div class="flex items-center p-2">
+                        <div class="pl-4 text-slate-400">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                            </svg>
+                        </div>
+                        <input type="text" id="searchInput"
+                            class="w-full h-14 bg-transparent border-none focus:ring-0 text-lg px-4" style="color:var(--ds-text-primary)"
+                            placeholder="输入问题描述，或直接粘贴图片 (Ctrl+V)..."
+                            onkeydown="if(event.key === 'Enter') handleSearch()">
+
+                        <!-- Paste/Image Button Hint -->
+                        <button onclick="document.getElementById('fileInput').click()"
+                            class="p-2 text-slate-400 hover:text-indigo-600 transition" title="Upload Image">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z">
+                                </path>
+                            </svg>
+                        </button>
+                        <input type="file" id="fileInput" accept="image/*" multiple class="hidden"
+                            onchange="handleFileSelect(event)">
+
+                        <button onclick="handleSearch()"
+                            class="mr-2 px-6 py-2 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-100 whitespace-nowrap">
+                            搜索
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <p class="mt-4 text-sm" style="color:var(--ds-text-muted)">支持语义搜索 & 图片识别，自动匹配历史解决方案</p>
+        </div>
+
+        <!-- Results Area -->
+        <div id="resultsArea" class="hidden fade-in" style="animation-delay: 0.2s;">
+
+            <!-- LLM Analysis Result -->
+            <div id="llmResultCard" class="hidden mb-8 glass p-6 rounded-2xl border-l-4 border-indigo-600 shadow-lg">
+                <h3 class="text-xl font-bold text-indigo-900 mb-2 flex items-center gap-2">
+                    <svg class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                    </svg>
+                    智能分析建议
+                </h3>
+                <!-- LLM Loading Indicator -->
+                <div id="llmLoading" class="hidden flex items-center gap-3 py-4">
+                    <div class="animate-spin rounded-full h-5 w-5 border-b-2 border-indigo-600"></div>
+                    <span class="text-slate-500 text-sm">AI 正在分析中，请稍候...</span>
+                </div>
+                <div id="llmContent" class="prose prose-indigo text-slate-700">
+                    <!-- Markdown content rendered here -->
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+                <!-- Card 3: Smart Board -->
+                <div
+                    class="card p-6 bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-all">
+                    <div class="bg-orange-100 w-12 h-12 rounded-xl flex items-center justify-center mb-4 text-2xl">
+                        📊
+                    </div>
+                    <h2 class="text-xl font-bold text-slate-800 mb-2">问题智能看板</h2>
+                    <p class="text-slate-500 text-sm mb-4">可视化管理工单，AI辅助分派与处理。</p>
+                    <a href="board.html"
+                        class="text-orange-600 font-medium hover:text-orange-800 flex items-center gap-1">
+                        进入看板 <span class="text-lg">→</span>
+                    </a>
+                </div>
+            </div>
+
+            <div id="kbSummaryCard" class="hidden mb-8 glass p-6 rounded-2xl border-l-4 border-cyan-500 shadow-lg">
+                <h3 class="text-xl font-bold text-cyan-900 mb-2 flex items-center gap-2">
+                    <svg class="w-5 h-5 text-cyan-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5A4.5 4.5 0 003 9.5v8A2.5 2.5 0 005.5 20H12m0-13C13.168 5.477 14.754 5 16.5 5A4.5 4.5 0 0121 9.5v8a2.5 2.5 0 01-2.5 2.5H12">
+                        </path>
+                    </svg>
+                    知识库解答
+                </h3>
+                <div id="kbSummaryContent" class="text-sm text-slate-700 leading-6"></div>
+                <div id="kbSummarySources" class="mt-4 flex flex-wrap gap-2"></div>
+            </div>
+
+            <div class="flex items-center justify-between mb-6">
+                <h3 class="text-xl font-bold text-slate-800 flex items-center gap-2">
+                    <span id="resultIcon">📚</span>
+                    <span id="resultTitle">相关工单参考</span>
+                </h3>
+                <!-- Badge dynamic -->
+            </div>
+
+            <!-- List -->
+            <div id="resultsList" class="space-y-6">
+                <!-- Results -->
+            </div>
+        </div>
+
+        <!-- Loading State -->
+        <div id="loadingState" class="hidden flex justify-center py-20">
+            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+        </div>
+
+        <!-- Empty State -->
+        <div id="emptyState" class="hidden flex flex-col items-center py-20 text-slate-400 fade-in">
+            <svg class="w-16 h-16 mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                    d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            <p>未找到相关内容，请尝试更详细的描述</p>
+        </div>
+
+    </div>
+
+    <!-- Marked Library for Markdown Rendering -->
+    <script src="/assets/vendor/marked.min.js"></script>
+    <!-- Common Utilities -->
+    <script src="/assets/common.js"></script>
+    <script src="/assets/ds/sidebar.js"></script>
+
+    <script>
+        let uploadedImages = []; // Base64 strings
+
+        // Presets
+        const PRESETS = {
+            'gemini': { base: '', model: 'gemini-2.0-flash' },
+            'deepseek': { base: 'https://api.deepseek.com', model: 'deepseek-chat' },
+            'zhipu': { base: 'https://open.bigmodel.cn/api/paas/v4/', model: 'glm-4' },
+            'aliyun': { base: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model: 'qwen-plus' },
+            'minimax': { base: 'https://api.minimax.chat/v1', model: 'abab6.5s-chat' },
+            'kimi': { base: 'https://api.moonshot.cn/v1', model: 'moonshot-v1-8k' },
+            'openai': { base: '', model: 'gpt-4o' }
+        };
+
+        // Settings Handling
+        // Structure: localStorage key 'llm_config_{provider}' -> JSON string { apiKey, modelName, baseUrl }
+        let currentProvider = localStorage.getItem('llm_last_provider') || 'gemini';
+        let currentConfig = loadConfigForProvider(currentProvider);
+
+        // Initialize on load
+        window.addEventListener('DOMContentLoaded', () => {
+            // No-op for now as it's set globally, but could be used to sync UI if needed
+        });
+
+        function loadConfigForProvider(provider) {
+            const raw = localStorage.getItem(`llm_config_${provider}`);
+            if (raw) {
+                return JSON.parse(raw);
+            }
+            // Defaults from Presets if not saved
+            return {
+                apiKey: '',
+                modelName: PRESETS[provider]?.model || '',
+                baseUrl: PRESETS[provider]?.base || ''
+            };
+        }
+
+        function openSettings() {
+            // Restore last selected provider
+            document.getElementById('providerSelect').value = currentProvider;
+
+            // Load config for that provider
+            const config = loadConfigForProvider(currentProvider);
+            populateSettingsUI(config);
+
+            handleProviderChange(false); // Update UI state without overwriting inputs from presets
+            document.getElementById('settingsModal').classList.remove('hidden');
+        }
+
+        function populateSettingsUI(config) {
+            document.getElementById('apiKeyInput').value = config.apiKey || '';
+            document.getElementById('modelNameInput').value = config.modelName || '';
+            document.getElementById('baseUrlInput').value = config.baseUrl || '';
+        }
+
+        function closeSettings() {
+            document.getElementById('settingsModal').classList.add('hidden');
+        }
+
+        function handleProviderChange(autoFillPresets = true) {
+            const provider = document.getElementById('providerSelect').value;
+            const advanced = document.getElementById('advancedConfig');
+            const apiKeySection = document.getElementById('apiKeySection');
+
+            if (provider === 'none') {
+                apiKeySection.classList.add('hidden');
+                advanced.classList.add('hidden');
+            } else {
+                // Show API key section for all providers
+                apiKeySection.classList.remove('hidden');
+                // Show advanced config (model name, base url) for all providers
+                // Gemini also supports different models like gemini-2.0-flash, gemini-1.5-pro
+                advanced.classList.remove('hidden');
+            }
+
+            // If switching providers, load that provider's saved config
+            // But if we are just opening the modal (autoFillPresets=false), don't overwrite if inputs are already populated?
+            // Actually, openSettings calls populateSettingsUI first.
+            // When user changes dropdown, we should load the config for the new provider.
+            if (autoFillPresets) {
+                const config = loadConfigForProvider(provider);
+                populateSettingsUI(config);
+            }
+        }
+
+        async function testApiKey() {
+            const providerSelect = document.getElementById('providerSelect');
+            const apiKeyInput = document.getElementById('apiKeyInput');
+            const modelNameInput = document.getElementById('modelNameInput');
+            const baseUrlInput = document.getElementById('baseUrlInput');
+            const testBtn = document.getElementById('testApiBtn');
+            const resultDiv = document.getElementById('testResult');
+
+            // 检查元素是否存在
+            if (!providerSelect || !apiKeyInput || !testBtn || !resultDiv) {
+                console.error('[testApiKey] 必要元素未找到');
+                return;
+            }
+
+            const provider = providerSelect.value;
+            const key = apiKeyInput.value.trim();
+            const model = (modelNameInput && modelNameInput.value.trim()) || (PRESETS[provider] && PRESETS[provider].model) || '';
+            const base = (baseUrlInput && baseUrlInput.value.trim()) || (PRESETS[provider] && PRESETS[provider].base) || '';
+
+            if (!key) {
+                resultDiv.className = 'mt-2 text-sm text-rose-600';
+                resultDiv.textContent = '请输入 API Key';
+                resultDiv.classList.remove('hidden');
+                return;
+            }
+
+            if (provider === 'none') {
+                resultDiv.className = 'mt-2 text-sm text-slate-600';
+                resultDiv.textContent = '当前已关闭 AI 分析';
+                resultDiv.classList.remove('hidden');
+                return;
+            }
+
+            // 设置测试状态
+            testBtn.disabled = true;
+            const originalBtnHtml = testBtn.innerHTML;
+            testBtn.innerHTML = '<svg class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg> 测试中...';
+            resultDiv.className = 'mt-2 text-sm text-slate-600';
+            resultDiv.textContent = '正在测试 API 连接...';
+            resultDiv.classList.remove('hidden');
+
+            try {
+                console.log('[testApiKey] 开始测试:', { provider, model, base });
+                
+                const response = await fetch(`${API_BASE}/api/llm/test`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        provider: provider,
+                        api_key: key,
+                        model_name: model,
+                        base_url: base
+                    })
+                });
+
+                console.log('[testApiKey] 响应状态:', response.status);
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('[testApiKey] 响应错误:', errorText);
+                    throw new Error(`HTTP ${response.status}: ${errorText || '服务器错误'}`);
+                }
+
+                const result = await response.json();
+                console.log('[testApiKey] 响应结果:', result);
+
+                if (result.status === 'success') {
+                    resultDiv.className = 'mt-2 text-sm text-emerald-600 flex items-center gap-1';
+                    resultDiv.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> 测试成功！模型可正常使用';
+                } else {
+                    resultDiv.className = 'mt-2 text-sm text-rose-600';
+                    resultDiv.textContent = `测试失败: ${result.message || '未知错误'}`;
+                }
+            } catch (e) {
+                console.error('[testApiKey] 测试异常:', e);
+                resultDiv.className = 'mt-2 text-sm text-rose-600';
+                resultDiv.textContent = `测试失败: ${e.message}`;
+            } finally {
+                testBtn.disabled = false;
+                testBtn.innerHTML = originalBtnHtml;
+            }
+        }
+
+        function saveSettings() {
+            const provider = document.getElementById('providerSelect').value;
+            const key = document.getElementById('apiKeyInput').value.trim();
+            const model = document.getElementById('modelNameInput').value.trim();
+            const base = document.getElementById('baseUrlInput').value.trim();
+
+            if (key || provider === 'none') {
+                const config = { apiKey: key, modelName: model, baseUrl: base };
+                localStorage.setItem(`llm_config_${provider}`, JSON.stringify(config));
+                localStorage.setItem('llm_last_provider', provider);
+
+                // Update global state
+                currentProvider = provider;
+                currentConfig = config;
+
+                showToast('配置已保存 (Settings Saved)');
+                closeSettings();
+            } else {
+                showToast('请输入 API Key', 'error');
+            }
+        }
+
+        // Image Handling
+        document.getElementById('searchInput').addEventListener('paste', (event) => {
+            const items = (event.clipboardData || event.originalEvent.clipboardData).items;
+            for (let item of items) {
+                if (item.kind === 'file' && item.type.startsWith('image/')) {
+                    const blob = item.getAsFile();
+                    processFile(blob);
+                }
+            }
+        });
+
+        function handleFileSelect(event) {
+            const files = event.target.files;
+            for (let file of files) {
+                processFile(file);
+            }
+        }
+
+        function processFile(file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const base64 = e.target.result;
+                uploadedImages.push(base64);
+                renderImagePreviews();
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function renderImagePreviews() {
+            const container = document.getElementById('imagePreviewContainer');
+            if (uploadedImages.length > 0) {
+                container.classList.remove('hidden');
+            } else {
+                container.classList.add('hidden');
+            }
+
+            container.innerHTML = '';
+            uploadedImages.forEach((src, index) => {
+                const wrap = document.createElement('div');
+                wrap.className = 'relative flex-shrink-0';
+                wrap.innerHTML = `
+                    <img src="${src}" class="h-16 w-16 object-cover rounded-lg border border-slate-200">
+                    <button onclick="removeImage(${index})" class="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-4 h-4 text-xs flex items-center justify-center hover:bg-red-600">&times;</button>
+                `;
+                container.appendChild(wrap);
+            });
+        }
+
+        function removeImage(index) {
+            uploadedImages.splice(index, 1);
+            renderImagePreviews();
+        }
+
+        // Logic
+        async function triggerAnalysis() {
+            const btn = document.getElementById('analyzeBtn');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<span class="animate-spin">↻</span> 处理中...';
+            btn.disabled = true;
+            try {
+                await fetch(`${API_BASE}/analyze`, { method: 'POST' });
+                showToast('分析任务已后台启动，请稍候再试');
+            } catch (e) {
+                showToast('启动失败', 'error');
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        }
+
+        async function handleSearch() {
+            const query = document.getElementById('searchInput').value.trim();
+            if (!query && uploadedImages.length === 0) return;
+
+            // UI Reset
+            document.getElementById('resultsArea').classList.add('hidden');
+            document.getElementById('emptyState').classList.add('hidden');
+            document.getElementById('loadingState').classList.remove('hidden');
+            document.getElementById('llmResultCard').classList.add('hidden');
+            document.getElementById('kbSummaryCard').classList.add('hidden');
+            document.getElementById('resultsList').innerHTML = '';
+            document.getElementById('llmContent').innerHTML = '';
+            document.getElementById('kbSummaryContent').innerHTML = '';
+            document.getElementById('kbSummarySources').innerHTML = '';
+
+            try {
+                const body = {
+                    query: query || "Image Query",
+                    api_key: currentProvider === 'none' ? null : currentConfig.apiKey,
+                    images: uploadedImages,
+                    model_provider: currentProvider === 'gemini' ? 'gemini' : 'openai_compatible',
+                    model_name: currentConfig.modelName,
+                    base_url: currentConfig.baseUrl
+                };
+
+                const response = await fetch(`${API_BASE}/query`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+
+                if (!response.ok) throw new Error('Search failed');
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+                let llmFullText = '';
+                let searchResultsRendered = false;
+
+                while (true) {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+
+                    buffer += decoder.decode(value, { stream: true });
+
+                    // Protocol: chunks separated by \n---\n
+                    const sections = buffer.split('\n---\n');
+                    buffer = sections.pop(); // Last one might be incomplete
+
+                    for (const section of sections) {
+                        if (!section.trim()) continue;
+                        try {
+                            const data = JSON.parse(section);
+
+                            if (data.search_results) {
+                                const hasSearchResults = Array.isArray(data.search_results.results) && data.search_results.results.length > 0;
+                                document.getElementById('loadingState').classList.add('hidden');
+                                renderSearchResultsOnly(data.search_results);
+                                searchResultsRendered = hasSearchResults;
+
+                                // Show LLM loading if API key is configured
+                                if (hasSearchResults && currentProvider !== 'none' && currentConfig.apiKey) {
+                                    const card = document.getElementById('llmResultCard');
+                                    card.classList.remove('hidden');
+                                    document.getElementById('llmLoading').classList.remove('hidden');
+                                    document.getElementById('llmContent').innerHTML = '';
+                                }
+                            }
+
+                            if (data.kb_summary) {
+                                renderKbSummary(data.kb_summary);
+                                document.getElementById('loadingState').classList.add('hidden');
+                                document.getElementById('resultsArea').classList.remove('hidden');
+                            }
+
+                            if (data.llm_chunk) {
+                                if (!searchResultsRendered) {
+                                    document.getElementById('loadingState').classList.add('hidden');
+                                    document.getElementById('resultsArea').classList.remove('hidden');
+                                }
+                                const card = document.getElementById('llmResultCard');
+                                card.classList.remove('hidden');
+
+                                // Hide LLM loading indicator when content starts
+                                document.getElementById('llmLoading').classList.add('hidden');
+
+                                llmFullText += data.llm_chunk;
+                                document.getElementById('llmContent').innerHTML = marked.parse(llmFullText);
+
+                                // Remove fallback if LLM started
+                                const fallback = document.getElementById('llmFallbackCard');
+                                if (fallback) fallback.remove();
+                            }
+                        } catch (e) {
+                            console.error("Chunk parse error", e, section);
+                        }
+                    }
+                }
+
+                // If finished and no results at all
+                if (!document.getElementById('llmResultCard').offsetParent &&
+                    document.getElementById('resultsList').children.length === 0) {
+                    document.getElementById('emptyState').classList.remove('hidden');
+                }
+
+            } catch (e) {
+                console.error(e);
+                showToast('搜索出错，请检查网络或配置', 'error');
+            } finally {
+                document.getElementById('loadingState').classList.add('hidden');
+            }
+        }
+
+        function renderSearchResultsOnly(searchResults) {
+            const list = document.getElementById('resultsList');
+            const area = document.getElementById('resultsArea');
+            const empty = document.getElementById('emptyState');
+
+            if (!searchResults || searchResults.results.length === 0) {
+                // We don't show empty yet because LLM might be coming
+                return;
+            }
+
+            area.classList.remove('hidden');
+
+            const allResults = searchResults.results;
+            const visibleCount = 3;
+            const visibleResults = allResults.slice(0, visibleCount);
+            const hiddenResults = allResults.slice(visibleCount);
+
+            function createResultCard(item) {
+                const div = document.createElement('div');
+                div.className = "glass p-6 rounded-2xl shadow-sm hover:shadow-lg transition-all border-l-4 border-indigo-500 cursor-pointer fade-in mb-4";
+
+                let solutionText = "";
+                const solutionMatch = item.content.match(/#+\s*解决方案/);
+                if (solutionMatch) {
+                    solutionText = item.content.split(solutionMatch[0])[1] || "";
+                } else {
+                    solutionText = item.content;
+                }
+                solutionText = solutionText.split("<!-- Metadata")[0].trim();
+                
+                // 修复文字对齐：去除每行开头的空格，保留换行格式
+                solutionText = solutionText.split('\n').map(line => line.trimStart()).join('\n');
+                
+                // 确保分数在0-1范围内，再转换为百分比
+                const normalizedScore = Math.min(Math.max(item.score || 0, 0), 1);
+                const similarityPercent = (normalizedScore * 100).toFixed(0);
+
+                div.innerHTML = `
+                    <div class="flex justify-between items-start mb-3">
+                        <h4 class="font-bold text-lg text-slate-800 line-clamp-2" title="${item.display_summary || item.key}">${item.display_summary || item.key}</h4>
+                        <span class="text-xs font-mono text-slate-400 bg-slate-100 px-2 py-1 rounded shrink-0 ml-2">${item.key} | ${similarityPercent}%</span>
+                    </div>
+                    <div class="text-sm text-slate-500 mb-3 whitespace-pre-wrap text-left">
+                        ${solutionText}
+                    </div>
+                `;
+                return div;
+            }
+
+            visibleResults.forEach(item => {
+                list.appendChild(createResultCard(item));
+            });
+
+            if (hiddenResults.length > 0) {
+                const hiddenContainer = document.createElement('div');
+                hiddenContainer.id = 'hiddenResults';
+                hiddenContainer.className = 'hidden space-y-6 mt-4';
+                hiddenResults.forEach(item => {
+                    hiddenContainer.appendChild(createResultCard(item));
+                });
+                list.appendChild(hiddenContainer);
+
+                const btnContainer = document.createElement('div');
+                btnContainer.className = 'flex justify-center mt-6';
+                const toggleBtn = document.createElement('button');
+                toggleBtn.className = 'px-6 py-2 bg-white border border-slate-200 text-slate-600 rounded-full text-sm hover:bg-slate-50 transition-colors shadow-sm';
+                toggleBtn.innerText = `查看更多 (${hiddenResults.length})`;
+                toggleBtn.onclick = () => {
+                    const el = document.getElementById('hiddenResults');
+                    if (el.classList.contains('hidden')) {
+                        el.classList.remove('hidden');
+                        toggleBtn.innerText = '收起';
+                    } else {
+                        el.classList.add('hidden');
+                        toggleBtn.innerText = `查看更多 (${hiddenResults.length})`;
+                    }
+                };
+                btnContainer.appendChild(toggleBtn);
+                list.appendChild(btnContainer);
+            }
+
+            // Render Fallback if LLM provider set to none or failed to start
+            if (currentProvider === 'none') {
+                const oldFallback = document.getElementById('llmFallbackCard');
+                if (oldFallback) oldFallback.remove();
+
+                const fallbackDiv = document.createElement('div');
+                fallbackDiv.id = 'llmFallbackCard';
+                fallbackDiv.className = "mb-8 glass p-6 rounded-2xl border-l-4 border-slate-300 shadow-lg flex items-center justify-between";
+                fallbackDiv.innerHTML = `
+                    <div>
+                        <h3 class="text-xl font-bold text-slate-700 mb-2 flex items-center gap-2">
+                            <svg class="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                            </svg>
+                            智能分析未启用
+                        </h3>
+                        <p class="text-slate-500 text-sm">配置 API Key 即可获取智能解决方案建议、团队推荐及角色指引。</p>
+                    </div>
+                    <button onclick="openSettings()" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm font-medium transition shadow-md">
+                        立即配置 AI
+                    </button>
+                `;
+                const targetElement = list.parentElement.querySelector('.flex.items-center.justify-between');
+                if (targetElement) {
+                    area.insertBefore(fallbackDiv, targetElement);
+                } else {
+                    area.appendChild(fallbackDiv);
+                }
+            }
+        }
+
+        function renderKbSummary(summary) {
+            const card = document.getElementById('kbSummaryCard');
+            const content = document.getElementById('kbSummaryContent');
+            const sources = document.getElementById('kbSummarySources');
+
+            card.classList.remove('hidden');
+            content.textContent = summary?.answer_text || '未检索到相关知识库内容';
+
+            const sourceItems = (summary?.sources || []).slice(0, 3);
+            sources.innerHTML = sourceItems.map(item => `
+                <a href="kb.html" class="px-3 py-1.5 rounded-full bg-cyan-50 text-cyan-700 text-xs hover:bg-cyan-100 transition">
+                    ${item.name || item.citation_label || '知识库资料'}
+                </a>
+            `).join('');
+        }
+
+        // renderResults is now deprecated by handleSearch's internal logic and renderSearchResultsOnly
+    </script>
+    </div><!-- end content area -->
+    </div><!-- end ds-main -->
+
+    <script src="/assets/project-context.js"></script>
+  <script src="/assets/nav.js"></script>
+    <script src="/assets/ds/theme.js"></script>
+    <script src="/assets/ds/command-palette.js"></script>
+    <script src="/assets/scope-switcher.js"></script>
+    <script>ScopeSwitcher.init();</script>
+</body>
+
+</html>

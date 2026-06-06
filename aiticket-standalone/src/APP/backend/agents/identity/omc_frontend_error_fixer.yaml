@@ -1,0 +1,22 @@
+name: omc_frontend_error_fixer
+display_name: '[OMC] frontend-error-fixer'
+personality: 'OMC subagent: frontend-error-fixer'
+behavioral_guidelines:
+- 遵循 OMC frontend-error-fixer 的角色定义执行任务
+- 任务完成后向父 agent 报告结果
+tool_chain:
+- omc_dispatch
+memory_write_trigger: never
+memory_write_scope: none
+memory_write_template: null
+id: a97d48a1-efb4-4384-8fd5-179fd661b6d1
+version: '1.0'
+hidden: true
+parent_agent: claude
+kind: omc_subagent
+triggerable_via: parent_only
+source_md: /Users/cfone/Studio/aiticket/.claude/agents/frontend-error-fixer.md
+omc_subagent_type: oh-my-claudecode:frontend-error-fixer
+tags:
+- omc
+- frontend-error-fixer

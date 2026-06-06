@@ -1,0 +1,39 @@
+{
+  "version": "1.0",
+  "description": "工单信息完整性规则，用于 Gate 1 检查",
+  "jira_field_mapping": {
+    "issue_type_confirmed": "customfield_10729"
+  },
+  "rules": [
+    {
+      "project": "流程中心",
+      "issue_type_confirmed": "bug",
+      "required": ["复现步骤", "错误截图或日志", "产品版本"],
+      "recommended": ["session_id 或操作时间", "前置条件"],
+      "optional": ["浏览器版本"],
+      "inquiry_template": "您好，为帮您快速定位问题，请补充以下信息：\n{missing_fields_list}\n感谢配合！"
+    },
+    {
+      "project": "流程中心",
+      "issue_type_confirmed": "客开",
+      "required": ["业务场景描述", "现行业务流说明", "期望实现效果"],
+      "recommended": ["是否影响标准产品功能", "产品版本", "客户名称"],
+      "optional": [],
+      "inquiry_template": "您好，为了评估客开方案可行性，请补充：\n{missing_fields_list}\n感谢配合！"
+    },
+    {
+      "project": "消息中心",
+      "issue_type_confirmed": "bug",
+      "required": ["消息类型", "接收人账号或 ID", "期望接收渠道（PC/钉钉/邮件等）"],
+      "recommended": ["是否在多台终端复测", "消息发送时间"],
+      "optional": ["截图"],
+      "inquiry_template": "您好，为定位消息问题，请补充：\n{missing_fields_list}\n感谢配合！"
+    }
+  ],
+  "default_fallback": {
+    "required": ["问题详细描述"],
+    "recommended": [],
+    "optional": [],
+    "inquiry_template": "您好，请提供更详细的问题描述，以便我们快速处理。\n{missing_fields_list}"
+  }
+}

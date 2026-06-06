@@ -1,0 +1,58 @@
+# aiticket compact (lite) — 核心运行依赖
+# 目标：启动 Jira 智能看板 + 智能回复 + KB 检索 + 自学习，体积尽量小。
+# 去掉：chromadb(→sqlite-vec)、pandas/numpy/scipy/sklearn(报表，→full)、google 全家桶(→full)。
+# 安装：uv pip install -r requirements-core.txt
+
+# --- Web 框架 ---
+fastapi==0.128.0
+uvicorn==0.39.0
+starlette==0.49.3
+python-multipart==0.0.20
+
+# --- Pydantic ---
+pydantic==2.12.5
+pydantic_core==2.41.5
+annotated-types==0.7.0
+typing-inspection==0.4.2
+typing_extensions==4.15.0
+
+# --- HTTP / 异步 ---
+anyio==4.12.1
+sniffio==1.3.1
+h11==0.16.0
+httpcore==1.0.9
+httpx==0.28.1
+requests==2.33.0
+certifi==2026.1.4
+charset-normalizer==3.4.4
+idna==3.11
+urllib3==2.7.0
+
+# --- LLM（OpenAI 兼容单一入口：智谱/OpenAI/通义/minimax）---
+openai==2.15.0
+jiter==0.12.0
+distro==1.9.0
+
+# --- 向量检索（替代 chromadb）---
+sqlite-vec==0.1.6
+fastembed==0.8.0
+# macOS / Windows: pysqlite3-binary 仅 linux x86 有轮子，macOS arm64 用系统 sqlite3 即可
+# pysqlite3-binary==0.5.4; sys_platform != "linux"
+
+# --- 中文分词 / KB ---
+jieba==0.42.1
+
+# --- 配置 / 调度 ---
+PyYAML==6.0.2
+croniter==2.0.7
+
+# --- 跨平台文件锁（替代 fcntl）---
+portalocker==2.10.1
+
+# --- 鉴权 / 工具 ---
+cryptography>=46.0.6
+Pillow>=12.2.0
+click==8.1.8
+python-dateutil==2.9.0.post0
+pytz==2025.2
+tzdata==2025.3

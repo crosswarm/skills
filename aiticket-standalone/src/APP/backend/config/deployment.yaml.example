@@ -1,0 +1,60 @@
+# aiticket 实例配置 — 复制为 deployment.yaml 后填写
+# 此文件不进版本库（.gitignore 已排除 deployment.yaml）
+
+instance:
+  name: "我的 Jira 项目"            # 显示在 nav 和页面标题
+  slug: "workflow"                   # 日志/路径前缀，英文小写+连字符
+  primary_project_key: "MYPROJECT"        # 默认 Jira 项目键
+  allowed_project_keys:              # 项目选择器候选（含主项目）
+    - "MYPROJECT"
+
+jira:
+  base_url: "https://jira.example.com"
+  cookie_domains:                    # 用于 Chrome cookie 匹配
+    - ".example.com"
+  ssl_verify: true
+  ca_bundle: ""                      # 内网自签 CA 路径，空字符串则用系统 CA
+
+# PM 系统（可选）
+# 启用后挂载 /api/pm/* 路由，需要部署环境能访问 PM base_url
+pm_system:
+  enabled: false                     # 改为 true 并填写 base_url 后生效
+  base_url: ""                       # 如 https://pm.example.com
+  tenant_info: "0000"
+  default_analyst: ""
+
+# 通知 Webhook（可选）
+# 支持飞书自定义机器人 / WeCom / 钉钉 / 任意 HTTP Webhook
+# 也可直接设置环境变量 NOTIFICATION_WEBHOOK_URL + NOTIFICATION_WEBHOOK_FORMAT
+notifications:
+  enabled: false
+  webhook_url: ""                    # Webhook 完整 URL（POST 目标）
+  webhook_format: "feishu"           # feishu | wecom | dingtalk | generic
+
+# LLM（API key 全部走 env var，见 .env.example；web 管理员界面可覆盖）
+llm:
+  default_provider_chain:
+    - "zhipu"
+    - "minimax"
+  features:                          # 各功能默认 provider（管理员可在 web 配置页调整）
+    daily_summary: ["zhipu"]
+    reply: ["zhipu", "minimax"]
+    kb_compile: ["zhipu"]
+    classification: ["minimax"]
+
+# 模块分类：用于 board 推荐团队 + 风格规则路由
+# keywords 任意一词出现在 issue 标题/分析结果中即命中
+module_taxonomy:
+  - name: "通用"
+    team: ""
+    keywords: []
+
+# KB 配置
+kb:
+  root_dir: "/data/kb"               # KB 源文件挂载路径（Docker volume）
+  topic_file: "/data/notes/topic.md" # 话题树配置文件，定义 AI 编译的主题分类
+  source_kinds:
+    - "doc"
+    - "ticket_case"
+    - "fact"
+  ontology_validator: "default"      # "default"（仅判空）或 "bip"（BIP 业务实体白名单）

@@ -1,0 +1,472 @@
+/* ===================================================================
+   base.css - 全局基础样式（去重版）
+   合并所有页面重复的 Tailwind fallback、通用工具类、动画
+   =================================================================== */
+
+/* --- 全局字体 & 排版 --- */
+body {
+  font-family: var(--ds-font);
+  font-size: var(--ds-text-base);
+  line-height: var(--ds-leading-normal);
+  color: var(--ds-text-primary);
+  background-color: var(--ds-bg-page);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* --- 主题过渡（仅对颜色/背景生效，避免阻塞其他动画） --- */
+html[data-theme] body,
+html[data-theme] .ds-card,
+html[data-theme] .ds-sidebar {
+  transition: background-color var(--ds-transition-slow),
+              color var(--ds-transition-slow),
+              border-color var(--ds-transition-slow);
+}
+
+/* --- SVG 尺寸 (Lucide 图标兼容) --- */
+.w-3 { width: 0.75rem !important; }
+.h-3 { height: 0.75rem !important; }
+.w-4 { width: 1rem !important; }
+.h-4 { height: 1rem !important; }
+.w-5 { width: 1.25rem !important; }
+.h-5 { height: 1.25rem !important; }
+.w-6 { width: 1.5rem !important; }
+.h-6 { height: 1.5rem !important; }
+.w-8 { width: 2rem !important; }
+.h-8 { height: 2rem !important; }
+svg { max-width: 100% !important; height: auto !important; }
+
+/* --- 滚动条隐藏 --- */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* --- 渐入动画 --- */
+@keyframes ds-fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.ds-fade-in {
+  animation: ds-fade-in var(--ds-transition-base) ease-out forwards;
+}
+
+/* --- 脉冲动画（分析中状态） --- */
+@keyframes ds-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+.ds-pulse {
+  animation: ds-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* --- 旋转加载动画 --- */
+@keyframes ds-spin {
+  to { transform: rotate(360deg); }
+}
+.ds-spin {
+  animation: ds-spin 0.7s linear infinite;
+}
+
+/* --- 骨架屏渐变动画 --- */
+@keyframes ds-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.ds-skeleton {
+  background: linear-gradient(90deg,
+    var(--ds-bg-muted) 25%,
+    var(--ds-bg-surface) 50%,
+    var(--ds-bg-muted) 75%
+  );
+  background-size: 200% 100%;
+  animation: ds-shimmer 1.5s ease-in-out infinite;
+  border-radius: var(--ds-radius-sm);
+}
+
+/* --- Toast 定位 --- */
+.ds-toast-container {
+  position: fixed;
+  top: var(--ds-space-4);
+  right: var(--ds-space-4);
+  z-index: var(--ds-z-toast);
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+  pointer-events: none;
+}
+.ds-toast-container > * {
+  pointer-events: auto;
+}
+
+/* --- 焦点环 (无障碍) --- */
+:focus-visible {
+  outline: 2px solid var(--ds-accent);
+  outline-offset: 2px;
+}
+
+/* --- 选中文字颜色 --- */
+::selection {
+  background-color: var(--ds-accent-subtle);
+  color: var(--ds-accent-text);
+}
+
+/* --- 全局链接 --- */
+a {
+  color: var(--ds-accent-text);
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
+
+/* ===================================================================
+   暗色模式 Tailwind 覆盖
+   让使用 Tailwind 硬编码色的现有页面在暗色模式下正常显示
+   =================================================================== */
+[data-theme="dark"] .bg-white,
+[data-theme="dark"] .bg-slate-50,
+[data-theme="dark"] .bg-gray-50 {
+  background-color: var(--ds-bg-surface) !important;
+}
+[data-theme="dark"] .bg-slate-100,
+[data-theme="dark"] .bg-gray-100 {
+  background-color: var(--ds-bg-muted) !important;
+}
+[data-theme="dark"] .bg-slate-800,
+[data-theme="dark"] .bg-slate-900 {
+  background-color: var(--ds-bg-inset) !important;
+}
+[data-theme="dark"] .text-slate-900,
+[data-theme="dark"] .text-gray-900,
+[data-theme="dark"] .text-slate-800,
+[data-theme="dark"] .text-gray-800 {
+  color: var(--ds-text-primary) !important;
+}
+[data-theme="dark"] .text-slate-700,
+[data-theme="dark"] .text-gray-700,
+[data-theme="dark"] .text-slate-600,
+[data-theme="dark"] .text-gray-600 {
+  color: var(--ds-text-secondary) !important;
+}
+[data-theme="dark"] .text-slate-500,
+[data-theme="dark"] .text-gray-500,
+[data-theme="dark"] .text-slate-400,
+[data-theme="dark"] .text-gray-400 {
+  color: var(--ds-text-muted) !important;
+}
+[data-theme="dark"] .border-slate-200,
+[data-theme="dark"] .border-gray-200,
+[data-theme="dark"] .border-slate-300,
+[data-theme="dark"] .border-gray-300 {
+  border-color: var(--ds-border) !important;
+}
+[data-theme="dark"] .border-b,
+[data-theme="dark"] .border-t {
+  border-color: var(--ds-border) !important;
+}
+[data-theme="dark"] .divide-gray-200 > :not([hidden]) ~ :not([hidden]),
+[data-theme="dark"] .divide-slate-200 > :not([hidden]) ~ :not([hidden]) {
+  border-color: var(--ds-border) !important;
+}
+[data-theme="dark"] .shadow-sm,
+[data-theme="dark"] .shadow {
+  box-shadow: var(--ds-shadow-sm) !important;
+}
+[data-theme="dark"] .shadow-md {
+  box-shadow: var(--ds-shadow-md) !important;
+}
+[data-theme="dark"] .shadow-lg {
+  box-shadow: var(--ds-shadow-lg) !important;
+}
+/* 暗色模式下的 glass morphism */
+[data-theme="dark"] .glass {
+  background: rgba(26, 34, 51, 0.85) !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+}
+/* 输入框暗色 */
+[data-theme="dark"] input,
+[data-theme="dark"] textarea,
+[data-theme="dark"] select {
+  background-color: var(--ds-bg-surface) !important;
+  color: var(--ds-text-primary) !important;
+  border-color: var(--ds-border) !important;
+}
+[data-theme="dark"] input::placeholder,
+[data-theme="dark"] textarea::placeholder {
+  color: var(--ds-text-muted) !important;
+}
+/* 暗色模式 hover 行 */
+[data-theme="dark"] .hover\:bg-gray-50:hover,
+[data-theme="dark"] .hover\:bg-slate-50:hover,
+[data-theme="dark"] tr:hover td {
+  background-color: var(--ds-bg-muted) !important;
+}
+/* 暗色模式下的背景渐变修正 */
+[data-theme="dark"] .bg-gradient-to-br,
+[data-theme="dark"] .bg-gradient-to-r,
+[data-theme="dark"] .bg-gradient-to-b {
+  background-image: none !important;
+  background-color: var(--ds-bg-page) !important;
+}
+/* 看板列头计数器 */
+[data-theme="dark"] .board-column .rounded-full.bg-white {
+  background-color: var(--ds-bg-muted) !important;
+  color: var(--ds-text-secondary) !important;
+}
+/* 模态框/弹窗暗色 */
+[data-theme="dark"] .bg-white.rounded-2xl,
+[data-theme="dark"] .bg-white.rounded-xl {
+  background-color: var(--ds-bg-surface) !important;
+}
+[data-theme="dark"] .bg-black.bg-opacity-50 {
+  background-color: rgba(0, 0, 0, 0.7) !important;
+}
+/* Tailwind bg-* 卡片常见类 */
+[data-theme="dark"] .bg-indigo-50,
+[data-theme="dark"] .bg-indigo-100 {
+  background-color: var(--ds-accent-subtle) !important;
+}
+[data-theme="dark"] .bg-green-100 {
+  background-color: var(--ds-success-subtle) !important;
+}
+[data-theme="dark"] .bg-red-100,
+[data-theme="dark"] .bg-red-200 {
+  background-color: var(--ds-danger-subtle) !important;
+}
+[data-theme="dark"] .bg-yellow-100 {
+  background-color: var(--ds-warning-subtle) !important;
+}
+[data-theme="dark"] .bg-blue-100 {
+  background-color: var(--ds-info-subtle) !important;
+}
+/* 看板列背景 -50 色系暗色覆盖 */
+[data-theme="dark"] .bg-red-50 {
+  background-color: rgba(248, 113, 113, 0.08) !important;
+}
+[data-theme="dark"] .bg-orange-50 {
+  background-color: rgba(251, 146, 60, 0.08) !important;
+}
+[data-theme="dark"] .bg-yellow-50 {
+  background-color: rgba(250, 204, 21, 0.08) !important;
+}
+[data-theme="dark"] .bg-blue-50 {
+  background-color: rgba(96, 165, 250, 0.08) !important;
+}
+[data-theme="dark"] .bg-indigo-50 {
+  background-color: rgba(129, 140, 248, 0.08) !important;
+}
+[data-theme="dark"] .bg-green-50 {
+  background-color: rgba(74, 222, 128, 0.08) !important;
+}
+[data-theme="dark"] .bg-purple-50 {
+  background-color: rgba(192, 132, 252, 0.08) !important;
+}
+[data-theme="dark"] .bg-violet-50 {
+  background-color: rgba(167, 139, 250, 0.08) !important;
+}
+[data-theme="dark"] .bg-teal-50 {
+  background-color: rgba(45, 212, 191, 0.08) !important;
+}
+[data-theme="dark"] .bg-emerald-50 {
+  background-color: rgba(52, 211, 153, 0.08) !important;
+}
+[data-theme="dark"] .bg-rose-50 {
+  background-color: rgba(251, 113, 133, 0.08) !important;
+}
+/* 看板卡片内的白色背景元素 */
+[data-theme="dark"] .issue-card,
+[data-theme="dark"] .board-column .bg-white,
+[data-theme="dark"] .req-card {
+  background-color: var(--ds-bg-surface) !important;
+  border-color: var(--ds-border) !important;
+}
+
+/* ===================================================================
+   DataTable 数据表格组件样式
+   =================================================================== */
+.ds-datatable-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-3);
+}
+.ds-datatable-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ds-space-3);
+}
+.ds-datatable-search {
+  max-width: 280px;
+}
+.ds-datatable-actions {
+  display: flex;
+  gap: var(--ds-space-2);
+}
+.ds-datatable-scroll {
+  overflow-x: auto;
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius-lg);
+}
+.ds-datatable-empty {
+  text-align: center;
+  padding: var(--ds-space-12) var(--ds-space-4) !important;
+  color: var(--ds-text-muted);
+}
+.ds-datatable-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ds-space-3);
+  flex-wrap: wrap;
+}
+.ds-datatable-count {
+  font-size: var(--ds-text-xs);
+  color: var(--ds-text-muted);
+}
+.ds-datatable-page-btns {
+  display: flex;
+  gap: var(--ds-space-1);
+}
+
+/* ===================================================================
+   Tailwind CSS Fallback Classes
+   当 tailwind-browser.min.js 加载失败时生效
+   =================================================================== */
+.tailwind-fallback .w-full { width: 100%; }
+.tailwind-fallback .h-full { height: 100%; }
+.tailwind-fallback .min-h-screen { min-height: 100vh; }
+.tailwind-fallback .flex { display: flex; }
+.tailwind-fallback .inline-flex { display: inline-flex; }
+.tailwind-fallback .grid { display: grid; }
+.tailwind-fallback .hidden { display: none; }
+.tailwind-fallback .block { display: block; }
+.tailwind-fallback .flex-col { flex-direction: column; }
+.tailwind-fallback .flex-row { flex-direction: row; }
+.tailwind-fallback .flex-wrap { flex-wrap: wrap; }
+.tailwind-fallback .flex-1 { flex: 1 1 0%; }
+.tailwind-fallback .flex-shrink-0 { flex-shrink: 0; }
+.tailwind-fallback .items-center { align-items: center; }
+.tailwind-fallback .items-start { align-items: flex-start; }
+.tailwind-fallback .justify-center { justify-content: center; }
+.tailwind-fallback .justify-between { justify-content: space-between; }
+.tailwind-fallback .justify-end { justify-content: flex-end; }
+.tailwind-fallback .gap-1 { gap: 0.25rem; }
+.tailwind-fallback .gap-2 { gap: 0.5rem; }
+.tailwind-fallback .gap-3 { gap: 0.75rem; }
+.tailwind-fallback .gap-4 { gap: 1rem; }
+.tailwind-fallback .gap-6 { gap: 1.5rem; }
+.tailwind-fallback .p-1 { padding: 0.25rem; }
+.tailwind-fallback .p-2 { padding: 0.5rem; }
+.tailwind-fallback .p-3 { padding: 0.75rem; }
+.tailwind-fallback .p-4 { padding: 1rem; }
+.tailwind-fallback .p-6 { padding: 1.5rem; }
+.tailwind-fallback .p-8 { padding: 2rem; }
+.tailwind-fallback .px-2 { padding-left: 0.5rem; padding-right: 0.5rem; }
+.tailwind-fallback .px-3 { padding-left: 0.75rem; padding-right: 0.75rem; }
+.tailwind-fallback .px-4 { padding-left: 1rem; padding-right: 1rem; }
+.tailwind-fallback .px-6 { padding-left: 1.5rem; padding-right: 1.5rem; }
+.tailwind-fallback .py-1 { padding-top: 0.25rem; padding-bottom: 0.25rem; }
+.tailwind-fallback .py-2 { padding-top: 0.5rem; padding-bottom: 0.5rem; }
+.tailwind-fallback .py-3 { padding-top: 0.75rem; padding-bottom: 0.75rem; }
+.tailwind-fallback .py-4 { padding-top: 1rem; padding-bottom: 1rem; }
+.tailwind-fallback .m-0 { margin: 0; }
+.tailwind-fallback .mx-auto { margin-left: auto; margin-right: auto; }
+.tailwind-fallback .mt-1 { margin-top: 0.25rem; }
+.tailwind-fallback .mt-2 { margin-top: 0.5rem; }
+.tailwind-fallback .mt-4 { margin-top: 1rem; }
+.tailwind-fallback .mb-2 { margin-bottom: 0.5rem; }
+.tailwind-fallback .mb-4 { margin-bottom: 1rem; }
+.tailwind-fallback .mb-6 { margin-bottom: 1.5rem; }
+.tailwind-fallback .ml-2 { margin-left: 0.5rem; }
+.tailwind-fallback .mr-2 { margin-right: 0.5rem; }
+.tailwind-fallback .text-xs { font-size: 0.75rem; line-height: 1rem; }
+.tailwind-fallback .text-sm { font-size: 0.875rem; line-height: 1.25rem; }
+.tailwind-fallback .text-base { font-size: 1rem; line-height: 1.5rem; }
+.tailwind-fallback .text-lg { font-size: 1.125rem; line-height: 1.75rem; }
+.tailwind-fallback .text-xl { font-size: 1.25rem; line-height: 1.75rem; }
+.tailwind-fallback .text-2xl { font-size: 1.5rem; line-height: 2rem; }
+.tailwind-fallback .text-3xl { font-size: 1.875rem; line-height: 2.25rem; }
+.tailwind-fallback .font-medium { font-weight: 500; }
+.tailwind-fallback .font-semibold { font-weight: 600; }
+.tailwind-fallback .font-bold { font-weight: 700; }
+.tailwind-fallback .text-white { color: #ffffff; }
+.tailwind-fallback .text-center { text-align: center; }
+.tailwind-fallback .text-right { text-align: right; }
+.tailwind-fallback .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tailwind-fallback .whitespace-nowrap { white-space: nowrap; }
+.tailwind-fallback .break-words { overflow-wrap: break-word; }
+.tailwind-fallback .rounded { border-radius: 0.25rem; }
+.tailwind-fallback .rounded-md { border-radius: 0.375rem; }
+.tailwind-fallback .rounded-lg { border-radius: 0.5rem; }
+.tailwind-fallback .rounded-xl { border-radius: 0.75rem; }
+.tailwind-fallback .rounded-2xl { border-radius: 1rem; }
+.tailwind-fallback .rounded-full { border-radius: 9999px; }
+.tailwind-fallback .border { border-width: 1px; }
+.tailwind-fallback .border-0 { border-width: 0; }
+.tailwind-fallback .shadow { box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+.tailwind-fallback .shadow-md { box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
+.tailwind-fallback .shadow-lg { box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); }
+.tailwind-fallback .overflow-hidden { overflow: hidden; }
+.tailwind-fallback .overflow-auto { overflow: auto; }
+.tailwind-fallback .overflow-x-auto { overflow-x: auto; }
+.tailwind-fallback .overflow-y-auto { overflow-y: auto; }
+.tailwind-fallback .relative { position: relative; }
+.tailwind-fallback .absolute { position: absolute; }
+.tailwind-fallback .fixed { position: fixed; }
+.tailwind-fallback .sticky { position: sticky; }
+.tailwind-fallback .inset-0 { top: 0; right: 0; bottom: 0; left: 0; }
+.tailwind-fallback .top-0 { top: 0; }
+.tailwind-fallback .right-0 { right: 0; }
+.tailwind-fallback .bottom-0 { bottom: 0; }
+.tailwind-fallback .left-0 { left: 0; }
+.tailwind-fallback .z-10 { z-index: 10; }
+.tailwind-fallback .z-20 { z-index: 20; }
+.tailwind-fallback .z-30 { z-index: 30; }
+.tailwind-fallback .z-40 { z-index: 40; }
+.tailwind-fallback .z-50 { z-index: 50; }
+.tailwind-fallback .opacity-0 { opacity: 0; }
+.tailwind-fallback .opacity-50 { opacity: 0.5; }
+.tailwind-fallback .opacity-75 { opacity: 0.75; }
+.tailwind-fallback .opacity-100 { opacity: 1; }
+.tailwind-fallback .transition { transition-property: all; transition-duration: 200ms; }
+.tailwind-fallback .transition-all { transition-property: all; transition-duration: 200ms; }
+.tailwind-fallback .duration-200 { transition-duration: 200ms; }
+.tailwind-fallback .duration-300 { transition-duration: 300ms; }
+.tailwind-fallback .cursor-pointer { cursor: pointer; }
+.tailwind-fallback .cursor-move { cursor: move; }
+.tailwind-fallback .select-none { user-select: none; }
+.tailwind-fallback .pointer-events-none { pointer-events: none; }
+.tailwind-fallback .bg-white { background-color: #ffffff; }
+.tailwind-fallback .bg-black { background-color: #000000; }
+.tailwind-fallback .bg-transparent { background-color: transparent; }
+
+/* --- 常用 Tailwind 色彩 fallback --- */
+.tailwind-fallback .bg-indigo-600 { background-color: #4f46e5; }
+.tailwind-fallback .bg-indigo-500 { background-color: #6366f1; }
+.tailwind-fallback .bg-indigo-100 { background-color: #e0e7ff; }
+.tailwind-fallback .bg-indigo-50 { background-color: #eef2ff; }
+.tailwind-fallback .text-indigo-600 { color: #4f46e5; }
+.tailwind-fallback .text-indigo-700 { color: #4338ca; }
+.tailwind-fallback .bg-slate-50 { background-color: #f8fafc; }
+.tailwind-fallback .bg-slate-100 { background-color: #f1f5f9; }
+.tailwind-fallback .bg-slate-800 { background-color: #1e293b; }
+.tailwind-fallback .bg-slate-900 { background-color: #0f172a; }
+.tailwind-fallback .text-slate-400 { color: #94a3b8; }
+.tailwind-fallback .text-slate-500 { color: #64748b; }
+.tailwind-fallback .text-slate-600 { color: #475569; }
+.tailwind-fallback .text-slate-700 { color: #334155; }
+.tailwind-fallback .text-slate-800 { color: #1e293b; }
+.tailwind-fallback .text-slate-900 { color: #0f172a; }
+.tailwind-fallback .border-slate-200 { border-color: #e2e8f0; }
+.tailwind-fallback .border-slate-300 { border-color: #cbd5e1; }
+.tailwind-fallback .bg-green-500 { background-color: #22c55e; }
+.tailwind-fallback .bg-red-500 { background-color: #ef4444; }
+.tailwind-fallback .bg-yellow-500 { background-color: #eab308; }
+.tailwind-fallback .bg-blue-500 { background-color: #3b82f6; }
+.tailwind-fallback .text-green-600 { color: #16a34a; }
+.tailwind-fallback .text-red-600 { color: #dc2626; }
+.tailwind-fallback .text-yellow-600 { color: #ca8a04; }

@@ -1,0 +1,22 @@
+name: omc_executor
+display_name: '[OMC] executor'
+personality: Focused task executor for implementation work (Sonnet)
+behavioral_guidelines:
+- 遵循 OMC executor 的角色定义执行任务
+- 任务完成后向父 agent 报告结果
+tool_chain:
+- omc_dispatch
+memory_write_trigger: never
+memory_write_scope: none
+memory_write_template: null
+id: 4b679ccb-3cd4-4a65-8fa2-ed5baa60d228
+version: '1.0'
+hidden: true
+parent_agent: claude
+kind: omc_subagent
+triggerable_via: parent_only
+source_md: /Volumes/MacMini/Users/cfone/.claude/plugins/cache/omc/oh-my-claudecode/4.11.2/agents/executor.md
+omc_subagent_type: oh-my-claudecode:executor
+tags:
+- omc
+- executor

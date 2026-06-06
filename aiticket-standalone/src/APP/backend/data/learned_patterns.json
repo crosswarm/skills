@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "last_run": null,
+  "gate2_routing_suggestions": [],
+  "gate2_prompt_few_shot_suggestions": [],
+  "classification_keyword_patterns": [],
+  "assignee_drift_alerts": [],
+  "blacklist": []
+}

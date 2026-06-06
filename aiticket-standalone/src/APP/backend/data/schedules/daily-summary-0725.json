@@ -1,0 +1,57 @@
+{
+  "id": "daily-summary-0725",
+  "name": "每日 07:25 会话日报",
+  "description": "扫描昨日 Claude Code 所有会话 JSONL，LLM 总结后飞书推送",
+  "cron": "25 7 * * *",
+  "trigger_type": "cron",
+  "enabled": true,
+  "task_type": "daily_summary",
+  "cooldown_hours": 20,
+  "params": {},
+  "created_by": "claude",
+  "created_at": "2026-04-30T00:00:00",
+  "last_run": "2026-06-05T23:55:05.784424",
+  "next_run": null,
+  "run_count": 8,
+  "last_status": "success",
+  "recent_runs": [
+    {
+      "ts": "2026-05-09T07:25:36.312401",
+      "status": "success",
+      "duration_s": 65.0
+    },
+    {
+      "ts": "2026-05-11T09:33:14.011503",
+      "status": "success",
+      "duration_s": 86.3
+    },
+    {
+      "ts": "2026-05-12T09:50:51.301974",
+      "status": "success",
+      "duration_s": 71.5
+    },
+    {
+      "ts": "2026-05-13T08:20:05.520090",
+      "status": "success",
+      "duration_s": 85.4
+    },
+    {
+      "ts": "2026-05-14T09:03:47.875907",
+      "status": "success",
+      "duration_s": 63.6
+    },
+    {
+      "ts": "2026-05-15T07:25:26.101327",
+      "status": "success",
+      "duration_s": 62.8
+    },
+    {
+      "ts": "2026-06-05T23:55:05.784424",
+      "status": "success",
+      "duration_s": 20.9
+    }
+  ],
+  "created_by_uuid": "aaac6ff8-d4a6-ce54-1d0b-0538426b0028",
+  "schema_version": "1.0",
+  "agent_hint": "daily_summary"
+}

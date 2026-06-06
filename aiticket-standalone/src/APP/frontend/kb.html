@@ -1,0 +1,1691 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 工单 - 知识库</title>
+    <link rel="stylesheet" href="/assets/responsive.css">
+    <link rel="stylesheet" href="/assets/ds/tokens.css">
+    <link rel="stylesheet" href="/assets/ds/base.css">
+    <link rel="stylesheet" href="/assets/ds/components.css">
+    <link rel="stylesheet" href="/assets/ds/command-palette.css">
+    <script src="/assets/vendor/tailwind-browser.min.js"></script>
+    <script src="/assets/vendor/marked.min.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #f8fafc 0%, #e0f2fe 50%, #eef2ff 100%);
+        }
+
+        .glass {
+            background: rgba(255, 255, 255, 0.86);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.22);
+        }
+
+        .scrollbar-hide::-webkit-scrollbar {
+            display: none;
+        }
+
+        .scrollbar-hide {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+
+        /* ── Wiki 浏览模式 ── */
+        /* wiki-card-grid 已废弃，卡片直接作为 #resultList grid 的子元素 */
+        .wiki-card { border-radius: 12px; padding: 18px; background: rgba(255,255,255,0.95);
+                     border: 1px solid rgba(99,102,241,0.15); cursor: pointer; transition: all .15s;
+                     min-height: 160px; display: flex; flex-direction: column; }
+        .wiki-card:hover { box-shadow: 0 4px 16px rgba(99,102,241,0.12);
+                           border-color: rgba(99,102,241,0.35); transform: translateY(-2px); }
+        .wiki-card-active { border-color: rgba(99,102,241,0.5); box-shadow: 0 0 0 2px rgba(99,102,241,0.15); }
+        .wiki-card-title { font-size:15px; font-weight:600; color:#1e293b; margin-bottom:8px; line-height:1.4; }
+        .wiki-card-excerpt { font-size:12.5px; color:#64748b; line-height:1.7; flex:1;
+                             display:-webkit-box; -webkit-line-clamp:4;
+                             -webkit-box-orient:vertical; overflow:hidden; }
+        .wiki-card-chips { display:flex; flex-wrap:wrap; gap:4px; margin-top:8px; }
+
+        /* ── 话题导航树 ── */
+        .topic-group-header { font-size:12px; font-weight:600; color:#475569; cursor:pointer;
+                              padding:4px 2px; display:flex; align-items:center; gap:4px;
+                              user-select:none; }
+        .topic-group-header:hover { color:#3730a3; }
+        .topic-group-children { padding-left:8px; }
+        .topic-tree-item { font-size:12px; color:#64748b; padding:3px 8px; cursor:pointer;
+                           border-radius:5px; display:flex; align-items:center; gap:5px; }
+        .topic-tree-item:hover { background:#f1f5f9; color:#3730a3; }
+        .topic-tree-item.compiled { color:#4f46e5; font-weight:500; }
+
+        /* ── Wiki 文章阅读区 ── */
+        .wiki-article { font-size:13px; color:#334155; }
+        .wiki-article-title { font-size:15px; font-weight:700; color:#1e293b; margin-bottom:2px; }
+        .wiki-article-meta { font-size:11px; color:#94a3b8; margin-bottom:12px; }
+        .wiki-section-head { font-size:13px; font-weight:600; color:#334155;
+                             border-bottom:1px solid #e2e8f0; padding-bottom:3px; margin-top:14px; margin-bottom:6px; }
+        .wiki-article ul { padding-left:14px; list-style:disc; font-size:12px; color:#475569; line-height:1.7; }
+        .wiki-article p { margin-bottom:6px; line-height:1.7; }
+        .wiki-related { margin-top:14px; display:flex; flex-wrap:wrap; gap:6px; }
+        .wiki-chip { padding:2px 8px; border-radius:999px; font-size:11px;
+                     background:#eef2ff; color:#6366f1; cursor:pointer; border:none; }
+        .wiki-chip:hover { background:#e0e7ff; }
+
+        .kb-drawer-shell {
+            width: min(calc(clamp(480px, 55vw, 900px) + 3rem), 100vw);
+            pointer-events: none;
+        }
+
+        .kb-side-rail {
+            position: fixed;
+            top: 6.5rem;
+            right: 1rem;
+            padding: 0.625rem;
+            border: 1px solid rgba(255, 255, 255, 0.72);
+            border-radius: 1.5rem;
+            background: rgba(255, 255, 255, 0.78);
+            box-shadow: 0 20px 40px rgba(15, 23, 42, 0.14);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            align-items: stretch;
+        }
+
+        .kb-drawer-shell.is-open {
+            pointer-events: auto;
+        }
+
+        .kb-drawer-backdrop {
+            opacity: 0;
+            transition: opacity 220ms ease;
+        }
+
+        .kb-drawer-panel {
+            transform: translateX(100%);
+            transition: transform 240ms ease;
+        }
+
+        .kb-drawer-shell.is-open .kb-drawer-backdrop {
+            opacity: 1;
+        }
+
+        .kb-drawer-shell.is-open .kb-drawer-panel {
+            transform: translateX(0);
+        }
+
+        @media (max-width: 1023px) {
+            .kb-drawer-shell {
+                width: 100vw;
+                height: min(calc(72vh + 3rem), 100vh);
+                top: auto;
+                bottom: 0;
+                right: 0;
+            }
+
+            .kb-drawer-backdrop {
+                top: 0;
+            }
+
+            .kb-drawer-panel {
+                transform: translateY(100%);
+            }
+
+            .kb-drawer-shell.is-open .kb-drawer-panel {
+                transform: translateY(0);
+            }
+        }
+    </style>
+</head>
+
+<body style="background:var(--ds-bg-page);color:var(--ds-text-primary);min-height:100vh">
+    <!-- 侧边栏 -->
+    <aside id="ds-sidebar" class="ds-sidebar"></aside>
+    <div id="ds-sidebar-overlay" class="ds-sidebar-overlay"></div>
+    <div id="ds-main" class="ds-main">
+    <div class="ds-page-header">
+        <div class="ds-page-header-left">
+            <button class="ds-hamburger" onclick="DSSidebar.open()">
+                <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+            </button>
+            <h1 class="ds-page-title">知识库工作台</h1>
+            <nav class="ds-breadcrumb ds-hide-mobile">
+                <span class="ds-breadcrumb-sep"></span>
+                <span class="ds-breadcrumb-current">知识检索</span>
+            </nav>
+        </div>
+    </div>
+
+    <main class="max-w-[1600px] mx-auto px-3 sm:px-4 py-6">
+        <div class="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-6">
+            <div class="space-y-4">
+                <section class="glass rounded-xl p-4 shadow-lg">
+                    <h2 class="font-semibold text-slate-700 mb-3">🤖 知识库问答</h2>
+                    <div class="space-y-3">
+                        <input id="searchInput" type="text" placeholder="输入问题，如：流程监控如何查询未来审批人"
+                            class="w-full p-2 border rounded-lg text-sm">
+                        <div class="flex gap-2">
+                            <button onclick="searchKnowledge()"
+                                class="flex-1 bg-indigo-600 text-white py-2 rounded-lg hover:bg-indigo-700">提问</button>
+                            <button id="syncButton" onclick="syncKnowledge()"
+                                class="px-3 py-2 bg-cyan-100 text-cyan-700 rounded-lg hover:bg-cyan-200 disabled:opacity-60 disabled:cursor-not-allowed">同步</button>
+                        </div>
+                        <p class="text-xs text-slate-500 leading-5">有 LLM 配置时优先输出智能问答；无配置时自动降级为匹配摘要模式。</p>
+                    </div>
+                </section>
+                <section class="glass rounded-xl p-4 shadow-lg hidden sm:block">
+                    <h2 class="font-semibold text-slate-700 mb-3">🧭 问题总览</h2>
+                    <div id="overviewPanel" class="space-y-3 text-sm text-slate-600">
+                        <div class="text-slate-400 text-sm text-center py-6">请输入问题查看检索策略、命中分布与工单侧证摘要</div>
+                    </div>
+                </section>
+                <section class="glass rounded-xl p-4 shadow-lg hidden sm:block">
+                    <h2 class="font-semibold text-slate-700 mb-3">📊 全库概览</h2>
+                    <div id="sourceStats" class="space-y-2 text-sm text-slate-600"></div>
+                    <div class="mt-4">
+                        <div class="text-xs font-medium text-slate-500 mb-2">🗂 知识导航</div>
+                        <div id="topicNavTree" class="space-y-1"></div>
+                    </div>
+                </section>
+            </div>
+
+            <div>
+                <section id="primaryMaterialsPanel" class="glass relative rounded-xl p-4 shadow-lg h-full">
+                    <!-- 智能分析（默认隐藏，提问后在列表上方弹出） -->
+                    <div id="analysisPanel" class="hidden mb-4 rounded-xl border border-indigo-100 bg-indigo-50/40 p-4">
+                        <div class="flex items-center justify-between mb-2">
+                            <h3 class="font-semibold text-slate-700 text-sm">🧠 智能分析</h3>
+                            <button type="button" onclick="toggleAnalysisPanel()"
+                                class="text-xs text-slate-500 hover:text-slate-700 transition" title="折叠/展开">
+                                <span id="analysisToggleIcon">收起 ▲</span>
+                            </button>
+                        </div>
+                        <div id="detailPanel" class="text-sm text-slate-600 max-h-[36vh] overflow-y-auto pr-1"></div>
+                    </div>
+
+                    <div class="flex items-center justify-between mb-3">
+                        <h2 id="middlePanelTitle" class="font-semibold text-slate-700">📖 知识导览</h2>
+                        <span id="resultCount" class="text-xs text-slate-400">0 条</span>
+                    </div>
+                    <div id="resultList" class="grid grid-cols-1 sm:grid-cols-2 gap-4 max-h-[80vh] overflow-y-auto">
+                        <div class="text-slate-400 text-sm text-center py-10 col-span-full">正在加载知识库...</div>
+                    </div>
+                    <div id="mobileDrawerRail" class="relative z-[45] mt-4 flex lg:hidden gap-2">
+                        <button id="detailDrawerTriggerMobile" type="button"
+                            onclick="openDetailDrawerFromSelection()"
+                            class="flex-1 px-3 py-2 rounded-full bg-slate-100 text-slate-700 text-xs shadow-sm hover:bg-slate-200 transition disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed">
+                            证据详情
+                        </button>
+                        <button id="deepEvidenceDrawerTriggerMobile" type="button"
+                            onclick="openKbDrawer('deep_evidence')"
+                            class="flex-1 px-3 py-2 rounded-full bg-slate-100 text-slate-700 text-xs shadow-sm hover:bg-slate-200 transition disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed">
+                            深层证据
+                        </button>
+                    </div>
+                </section>
+            </div>
+        </div>
+    </main>
+
+    <div id="desktopDrawerRail" class="hidden lg:flex kb-side-rail flex-col gap-3 z-[45]">
+        <button id="detailDrawerTriggerDesktop" type="button"
+            onclick="openDetailDrawerFromSelection()"
+            class="px-3 py-3 rounded-2xl bg-slate-100 text-slate-700 text-xs shadow-sm hover:bg-slate-200 transition disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed">
+            证据详情
+        </button>
+        <button id="deepEvidenceDrawerTriggerDesktop" type="button"
+            onclick="openKbDrawer('deep_evidence')"
+            class="px-3 py-3 rounded-2xl bg-slate-100 text-slate-700 text-xs shadow-sm hover:bg-slate-200 transition disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed">
+            深层证据
+        </button>
+    </div>
+
+    <div id="kbDrawer" class="kb-drawer-shell hidden fixed inset-y-0 right-0 z-40" aria-hidden="true">
+        <div id="kbDrawerBackdrop" class="kb-drawer-backdrop absolute inset-0 top-16 bg-slate-900/30" onclick="closeKbDrawer()"></div>
+        <aside id="kbDrawerPanel"
+            class="kb-drawer-panel absolute right-0 top-20 bottom-4 w-[clamp(480px,55vw,900px)] max-w-[calc(100vw-1rem)] rounded-l-3xl bg-white/95 border-l border-white/60 shadow-2xl shadow-slate-900/20 backdrop-blur-xl flex flex-col overflow-hidden
+                   lg:right-0
+                   max-lg:left-0 max-lg:right-0 max-lg:top-auto max-lg:bottom-0 max-lg:w-full max-lg:max-w-none max-lg:h-[72vh] max-lg:rounded-t-3xl max-lg:rounded-l-none">
+            <div class="px-5 py-4 border-b border-slate-200/80 bg-white/80">
+                <div class="flex items-start justify-between gap-4">
+                    <div class="min-w-0">
+                        <div id="kbDrawerTitle" class="text-base font-semibold text-slate-800">第四层详情</div>
+                        <div id="kbDrawerMeta" class="mt-1 text-xs text-slate-500">按需查看当前选中资料或深层侧证。</div>
+                    </div>
+                    <button id="kbDrawerClose" type="button" onclick="closeKbDrawer()"
+                        class="w-9 h-9 rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200 transition flex items-center justify-center text-lg leading-none">
+                        ×
+                    </button>
+                </div>
+                <div class="mt-4 flex flex-wrap gap-2">
+                    <button id="detailDrawerTab" type="button" onclick="openKbDrawer('detail')"
+                        class="px-3 py-1.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700 hover:bg-slate-200 transition disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed">
+                        证据详情
+                    </button>
+                    <button id="deepEvidenceDrawerTab" type="button" onclick="openKbDrawer('deep_evidence')"
+                        class="px-3 py-1.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700 hover:bg-slate-200 transition disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed">
+                        深层证据
+                    </button>
+                </div>
+            </div>
+            <div id="kbDrawerBody" class="flex-1 overflow-y-auto px-5 py-4 text-sm text-slate-700"></div>
+        </aside>
+    </div>
+
+    <script src="/assets/common.js?v=20260316b"></script>
+    <script>
+        let manifestData = null;
+        const SOURCE_KIND_LABELS = {
+            kb_local: '本地知识库',
+            apcom_docs: 'APCOM 文档',
+            ticket_case: '历史工单侧证',
+        };
+        const QUERY_INTENT_LABELS = {
+            operation: '操作 / 实施问题',
+            principle: '原理 / 机制问题',
+            mixed: '混合问题',
+        };
+        const RELEVANCE_LEVEL_LABELS = {
+            high: '高相关',
+            medium: '中相关',
+            low: '低相关',
+        };
+        const kbState = {
+            answerHtml: '',
+            answerText: '',
+            results: [],
+            allSources: [],
+            selectedSourceId: '',
+            detailViewMode: 'content',
+            detailHtml: '',
+            detailCache: new Map(),
+            queryProfile: null,
+            relevanceSummary: null,
+            ticketSummary: null,
+            sourceCounts: { kb_local: 0, apcom_docs: 0, ticket_case: 0 },
+            sourceGroups: { kb_local: [], apcom_docs: [], ticket_case: [] },
+            topicNames: [],
+            fallbackUsed: false,
+            queryText: '',
+            primaryMaterialsOnly: true,
+            drawerOpen: false,
+            drawerMode: '',
+            // ── 浏览模式 (新增) ──
+            browseMode: true,
+            compiledArticles: [],
+            activeWikiArticle: null,
+        };
+        let kbDrawerHideTimer = null;
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            // 并行加载 manifest + compiled，5s 超时降级
+            function withTimeout(promise, ms) {
+                const timer = new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms));
+                return Promise.race([promise, timer]);
+            }
+            const [manifestResult, compiledResult] = await Promise.all([
+                withTimeout(fetch(`${API_BASE}/api/kb/manifest`).then(r => { if (!r.ok) throw new Error(`manifest ${r.status}`); return r.json(); }), 5000)
+                    .catch(() => ({ topics: [], sources: {}, items: [], total_count: 0 })),
+                withTimeout(fetch(`${API_BASE}/api/kb/compiled?top_k=500`).then(r => { if (!r.ok) throw new Error(`compiled ${r.status}`); return r.json(); }), 5000)
+                    .catch(() => ({ items: [] })),
+            ]);
+            manifestData = manifestResult;
+            kbState.compiledArticles = compiledResult.items || [];
+            renderStats();
+            renderOverviewPanel();
+            renderDrawerControls();
+            renderKbDrawer();
+            if (kbState.compiledArticles.length > 0) {
+                renderWikiBrowseMode();
+            } else {
+                kbState.browseMode = false;
+                document.getElementById('resultList').innerHTML = '<div class="text-slate-400 text-sm text-center py-10 col-span-full">请输入问题开始知识库问答</div>';
+                document.getElementById('middlePanelTitle').textContent = '📚 主资料';
+            }
+        });
+
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape' && kbState.drawerOpen) {
+                closeKbDrawer();
+            }
+        });
+
+        // 搜索框清空 → 恢复浏览模式
+        document.addEventListener('DOMContentLoaded', () => {
+            const si = document.getElementById('searchInput');
+            if (si) {
+                si.addEventListener('input', () => {
+                    if (si.value === '' && kbState.compiledArticles.length > 0) {
+                        kbState.browseMode = true;
+                        kbState.queryText = '';
+                        document.getElementById('middlePanelTitle').textContent = '📖 知识导览';
+                        renderDetailPanel();       // 清空后隐藏智能分析
+                        renderWikiBrowseMode();
+                        renderWikiArticle(kbState.activeWikiArticle);
+                    }
+                });
+            }
+        });
+
+        async function loadManifest() {
+            const res = await fetch(`${API_BASE}/api/kb/manifest`);
+            manifestData = await res.json();
+            renderStats();
+        }
+
+        function renderStats() {
+            const kbMetaEl = document.getElementById('kbMeta');
+            if (kbMetaEl) kbMetaEl.textContent = `总条目 ${manifestData.total_count || 0}`;
+            const stats = manifestData.sources || {};
+            const compiledCount = kbState.compiledArticles.length;
+            const localCount = stats.kb_local?.count || 0;
+            const sourceStatsEl = document.getElementById('sourceStats');
+            if (!sourceStatsEl) return;
+            sourceStatsEl.innerHTML =
+                `<div class="flex items-center justify-between px-3 py-2 bg-indigo-50 rounded-lg">
+                    <span class="text-indigo-700">综合解析</span>
+                    <strong class="text-indigo-700">${compiledCount} 条</strong>
+                </div>` +
+                Object.entries(stats).map(([key, value]) => `
+                <div class="flex items-center justify-between px-3 py-2 bg-slate-50 rounded-lg">
+                    <span>${escapeHtml(key)}</span>
+                    <strong>${value.count}</strong>
+                </div>
+            `).join('');
+            renderTopicNavigator(manifestData.topics || []);
+        }
+
+        function coerceCount(value) {
+            if (value && typeof value === 'object') {
+                return Number(value.count || 0) || 0;
+            }
+            return Number(value || 0) || 0;
+        }
+
+        function normalizeSourceCounts(raw) {
+            return {
+                kb_local: coerceCount(raw?.kb_local),
+                apcom_docs: coerceCount(raw?.apcom_docs),
+                ticket_case: coerceCount(raw?.ticket_case),
+            };
+        }
+
+        function getSourceCountsFromResponse(data) {
+            if (data?.source_counts && !Array.isArray(data.source_counts)) {
+                return normalizeSourceCounts(data.source_counts);
+            }
+            if (data?.source_groups) {
+                return {
+                    kb_local: (data.source_groups.kb_local || []).length,
+                    apcom_docs: (data.source_groups.apcom_docs || []).length,
+                    ticket_case: (data.source_groups.ticket_case || []).length,
+                };
+            }
+            return { kb_local: 0, apcom_docs: 0, ticket_case: 0 };
+        }
+
+        function dedupeItems(items) {
+            const seen = new Set();
+            return (items || []).filter((item) => {
+                if (!item) return false;
+                const key = item.content_id || `${item.source_kind || 'unknown'}:${item.name || ''}`;
+                if (!key || seen.has(key)) {
+                    return false;
+                }
+                seen.add(key);
+                return true;
+            });
+        }
+
+        function getPrimaryMaterialsFromResponse(data) {
+            const explicit = Array.isArray(data?.primary_materials) && data.primary_materials.length
+                ? data.primary_materials
+                : Array.isArray(data?.sources)
+                    ? data.sources.filter((item) => item?.source_kind !== 'ticket_case')
+                    : [];
+            return dedupeItems(explicit);
+        }
+
+        function getTicketItemsFromResponse(data) {
+            const summaryItems = Array.isArray(data?.ticket_summary?.items) ? data.ticket_summary.items : [];
+            const groupedItems = Array.isArray(data?.source_groups?.ticket_case) ? data.source_groups.ticket_case : [];
+            const sourceItems = Array.isArray(data?.sources) ? data.sources.filter((item) => item?.source_kind === 'ticket_case') : [];
+            return dedupeItems([...summaryItems, ...groupedItems, ...sourceItems]);
+        }
+
+        function normalizeTopicNames(items) {
+            return (items || [])
+                .map((item) => {
+                    if (typeof item === 'string') return item;
+                    return item?.name || item?.topic_id || '';
+                })
+                .filter(Boolean);
+        }
+
+        function formatSourceKind(sourceKind) {
+            return SOURCE_KIND_LABELS[sourceKind] || sourceKind || '未知来源';
+        }
+
+        function formatQueryIntent(intent) {
+            return QUERY_INTENT_LABELS[intent] || QUERY_INTENT_LABELS.mixed;
+        }
+
+        function formatRelevanceLevel(level) {
+            return RELEVANCE_LEVEL_LABELS[level] || '未标注';
+        }
+
+        function sourceKindBadgeClass(sourceKind) {
+            if (sourceKind === 'apcom_docs') return 'bg-cyan-100 text-cyan-700';
+            if (sourceKind === 'ticket_case') return 'bg-emerald-100 text-emerald-700';
+            return 'bg-violet-100 text-violet-700';
+        }
+
+        function relevanceBadgeClass(level) {
+            if (level === 'high') return 'bg-emerald-100 text-emerald-700';
+            if (level === 'medium') return 'bg-amber-100 text-amber-700';
+            return 'bg-slate-100 text-slate-600';
+        }
+
+        function buildDisplayResults(data) {
+            const primaryMaterials = getPrimaryMaterialsFromResponse(data);
+            const ticketItems = getTicketItemsFromResponse(data);
+            return {
+                primaryMaterials,
+                ticketItems,
+                displayItems: primaryMaterials.length ? primaryMaterials : ticketItems,
+                primaryMaterialsOnly: primaryMaterials.length > 0,
+            };
+        }
+
+        function buildTicketSummary(data, ticketItems) {
+            const issueKeys = [];
+            ticketItems.forEach((item) => {
+                const label = item.source_rel_path || item.issue_key || item.name || '';
+                const matched = /([A-Z]+-\d+)/.exec(label);
+                const issueKey = matched?.[1];
+                if (issueKey && !issueKeys.includes(issueKey)) {
+                    issueKeys.push(issueKey);
+                }
+            });
+            return {
+                related_count: Number(data?.ticket_summary?.related_count ?? ticketItems.length) || 0,
+                top_issue_keys: Array.isArray(data?.ticket_summary?.top_issue_keys) && data.ticket_summary.top_issue_keys.length
+                    ? data.ticket_summary.top_issue_keys
+                    : issueKeys.slice(0, 5),
+                items: ticketItems.slice(0, 5),
+            };
+        }
+
+        function getSelectedItem() {
+            return kbState.results.find((item) => item.content_id === kbState.selectedSourceId)
+                || kbState.allSources.find((item) => item.content_id === kbState.selectedSourceId)
+                || null;
+        }
+
+        function getSupplementalDocs() {
+            return dedupeItems((kbState.allSources || []).filter((item) =>
+                item?.source_kind !== 'ticket_case'
+                && !kbState.results.some((result) => result.content_id === item.content_id)
+            )).slice(0, 5);
+        }
+
+        function getDeepEvidenceItems() {
+            return {
+                ticketItems: dedupeItems(kbState.ticketSummary?.items || kbState.sourceGroups.ticket_case || []),
+                supplementalDocs: getSupplementalDocs(),
+            };
+        }
+
+        function hasDeepEvidenceAvailable() {
+            const { ticketItems, supplementalDocs } = getDeepEvidenceItems();
+            return ticketItems.length > 0 || supplementalDocs.length > 0;
+        }
+
+        function hasDetailAvailable() {
+            return Boolean(kbState.selectedSourceId);
+        }
+
+        function updateDrawerTrigger(buttonId, enabled, active) {
+            const button = document.getElementById(buttonId);
+            if (!button) return;
+            button.disabled = !enabled;
+            const buttonShape = buttonId.includes('Desktop')
+                ? 'w-24 px-3 py-3 rounded-2xl shadow-sm font-medium'
+                : buttonId.includes('Mobile')
+                    ? 'flex-1 px-3 py-2 rounded-full shadow-sm'
+                    : 'px-3 py-1.5 rounded-full font-medium';
+            button.className = `${buttonShape} text-xs transition ${
+                !enabled
+                    ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                    : active
+                        ? 'bg-indigo-600 text-white hover:bg-indigo-700'
+                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+            }`;
+        }
+
+        function renderDrawerControls() {
+            const detailActive = kbState.drawerOpen && kbState.drawerMode === 'detail';
+            const deepActive = kbState.drawerOpen && kbState.drawerMode === 'deep_evidence';
+            const desktopRail = document.getElementById('desktopDrawerRail');
+            const mobileRail = document.getElementById('mobileDrawerRail');
+            if (desktopRail) {
+                desktopRail.style.display = kbState.drawerOpen ? 'none' : '';
+            }
+            if (mobileRail) {
+                mobileRail.style.display = kbState.drawerOpen ? 'none' : '';
+            }
+            document.querySelectorAll('[data-detail-actions]').forEach((node) => {
+                node.style.display = kbState.drawerOpen ? 'none' : 'flex';
+            });
+            updateDrawerTrigger('detailDrawerTriggerDesktop', hasDetailAvailable(), detailActive);
+            updateDrawerTrigger('detailDrawerTriggerMobile', hasDetailAvailable(), detailActive);
+            updateDrawerTrigger('deepEvidenceDrawerTriggerDesktop', hasDeepEvidenceAvailable(), deepActive);
+            updateDrawerTrigger('deepEvidenceDrawerTriggerMobile', hasDeepEvidenceAvailable(), deepActive);
+            updateDrawerTrigger('detailDrawerTab', hasDetailAvailable(), detailActive);
+            updateDrawerTrigger('deepEvidenceDrawerTab', hasDeepEvidenceAvailable(), deepActive);
+        }
+
+        function openDrawerShell() {
+            const shell = document.getElementById('kbDrawer');
+            clearTimeout(kbDrawerHideTimer);
+            shell.classList.remove('hidden');
+            requestAnimationFrame(() => {
+                shell.classList.add('is-open');
+            });
+            document.body.classList.add('overflow-hidden');
+        }
+
+        function closeDrawerShell() {
+            const shell = document.getElementById('kbDrawer');
+            shell.classList.remove('is-open');
+            clearTimeout(kbDrawerHideTimer);
+            kbDrawerHideTimer = window.setTimeout(() => {
+                shell.classList.add('hidden');
+            }, 240);
+            document.body.classList.remove('overflow-hidden');
+        }
+
+        function buildDeepEvidenceHtml() {
+            const { ticketItems, supplementalDocs } = getDeepEvidenceItems();
+            if (!ticketItems.length && !supplementalDocs.length) {
+                return '<div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-500">当前问题暂无可展开的深层证据。</div>';
+            }
+
+            return `
+                <div class="space-y-5">
+                    ${supplementalDocs.length ? `
+                        <section>
+                            <div class="font-medium text-slate-700 mb-3">补充资料</div>
+                            <div class="space-y-2">
+                                ${supplementalDocs.map((item) => `
+                                    <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-600">
+                                        <div class="flex items-center justify-between gap-3">
+                                            <div class="font-medium text-slate-800">${escapeHtml(item.name || '未命名资料')}</div>
+                                            <span class="px-2 py-1 rounded-full text-[11px] ${sourceKindBadgeClass(item.source_kind)}">${escapeHtml(formatSourceKind(item.source_kind))}</span>
+                                        </div>
+                                        <div class="mt-2 leading-6">${escapeHtml(item.summary || item.relevance_reason || '暂无摘要')}</div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </section>
+                    ` : ''}
+                    <section>
+                        <div class="font-medium text-slate-700 mb-3">历史工单侧证</div>
+                        ${ticketItems.length ? `
+                            <div class="space-y-2">
+                                ${ticketItems.map((item) => `
+                                    <div class="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm text-emerald-800">
+                                        <div class="flex items-center justify-between gap-3">
+                                            <div class="font-medium">${escapeHtml(item.name || item.citation_label || '未命名工单')}</div>
+                                            <span class="px-2 py-1 rounded-full bg-white/80 text-[11px] text-emerald-700">${escapeHtml(item.citation_label || formatSourceKind(item.source_kind))}</span>
+                                        </div>
+                                        <div class="mt-2 leading-6">${escapeHtml(item.summary || item.relevance_reason || '暂无摘要')}</div>
+                                        ${item.relevance_reason ? `<div class="mt-2 text-xs text-emerald-700/80">${escapeHtml(item.relevance_reason)}</div>` : ''}
+                                    </div>
+                                `).join('')}
+                            </div>
+                        ` : '<div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-500">当前问题未命中历史工单侧证。</div>'}
+                    </section>
+                </div>
+            `;
+        }
+
+        function renderKbDrawer() {
+            const shell = document.getElementById('kbDrawer');
+            const title = document.getElementById('kbDrawerTitle');
+            const meta = document.getElementById('kbDrawerMeta');
+            const body = document.getElementById('kbDrawerBody');
+            const selectedItem = getSelectedItem();
+
+            if (!kbState.drawerOpen || !kbState.drawerMode) {
+                closeDrawerShell();
+                shell.setAttribute('aria-hidden', 'true');
+                renderDrawerControls();
+                return;
+            }
+
+            if (kbState.drawerMode === 'detail') {
+                title.textContent = '证据详情';
+                meta.textContent = selectedItem
+                    ? `当前资料：${selectedItem.name || selectedItem.citation_label || selectedItem.content_id}`
+                    : '当前暂无选中的资料。';
+                body.innerHTML = kbState.detailHtml || '<div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-500">请先在主资料区选择资料，再打开证据详情。</div>';
+            } else {
+                title.textContent = '深层证据与详情';
+                meta.textContent = '补充资料与历史工单侧证默认进入此抽屉查看。';
+                body.innerHTML = buildDeepEvidenceHtml();
+            }
+
+            shell.setAttribute('aria-hidden', 'false');
+            openDrawerShell();
+            renderDrawerControls();
+        }
+
+        function closeKbDrawer() {
+            kbState.drawerOpen = false;
+            kbState.drawerMode = '';
+            renderKbDrawer();
+        }
+
+        async function openKbDrawer(mode) {
+            if (mode === 'detail') {
+                await openDetailDrawerFromSelection();
+                return;
+            }
+            if (mode === 'deep_evidence' && !hasDeepEvidenceAvailable()) {
+                return;
+            }
+            kbState.drawerMode = mode;
+            kbState.drawerOpen = true;
+            renderKbDrawer();
+        }
+
+        async function openDetailDrawerFromSelection() {
+            if (!hasDetailAvailable()) {
+                return;
+            }
+            await showDetail(kbState.selectedSourceId, kbState.detailViewMode || 'content', null, { openDrawer: true });
+        }
+
+        function renderOverviewPanel() {
+            const container = document.getElementById('overviewPanel');
+            if (!kbState.queryText) {
+                container.innerHTML = '<div class="text-slate-400 text-sm text-center py-6">请输入问题查看检索策略、命中分布与工单侧证摘要</div>';
+                return;
+            }
+
+            const queryIntent = kbState.queryProfile?.query_intent || 'mixed';
+            const strategy = kbState.queryProfile?.source_weight_strategy || '当前返回未提供来源加权策略。';
+            const ticketCount = Number(kbState.ticketSummary?.related_count || 0) || 0;
+            const formalCount = kbState.primaryMaterialsOnly ? kbState.results.length : 0;
+            const topIssueKeys = kbState.ticketSummary?.top_issue_keys || [];
+            const sourceCards = ['kb_local', 'apcom_docs', 'ticket_case'].map((key) => `
+                <div class="rounded-lg bg-slate-50 px-3 py-2">
+                    <div class="text-[11px] text-slate-500">${escapeHtml(key)}</div>
+                    <div class="mt-1 font-semibold text-slate-800">${kbState.sourceCounts[key] || 0}</div>
+                </div>
+            `).join('');
+            const topicHtml = kbState.topicNames.length
+                ? kbState.topicNames.map((topic) => `<span class="px-2 py-1 rounded-full bg-indigo-50 text-indigo-700 text-[11px]">${escapeHtml(topic)}</span>`).join('')
+                : '<span class="text-xs text-slate-400">暂无 Topic 命中</span>';
+
+            container.innerHTML = `
+                <div class="rounded-xl bg-slate-50 p-3">
+                    <div class="text-xs text-slate-500">当前问题</div>
+                    <div class="mt-1 font-medium text-slate-800 leading-6">${escapeHtml(kbState.queryText)}</div>
+                </div>
+                <div class="grid grid-cols-2 gap-2 text-xs">
+                    <div class="rounded-lg bg-slate-50 p-3">
+                        <div class="text-slate-500">查询意图</div>
+                        <div class="mt-1 font-semibold text-slate-800"><code>${escapeHtml(queryIntent)}</code> ${escapeHtml(formatQueryIntent(queryIntent))}</div>
+                    </div>
+                    <div class="rounded-lg bg-slate-50 p-3">
+                        <div class="text-slate-500">回答模式</div>
+                        <div class="mt-1 font-semibold text-slate-800">${kbState.fallbackUsed ? '证据摘要回退' : 'LLM 智能回答'}</div>
+                    </div>
+                    <div class="rounded-lg bg-slate-50 p-3">
+                        <div class="text-slate-500">主资料数量</div>
+                        <div class="mt-1 font-semibold text-slate-800">${formalCount}</div>
+                    </div>
+                    <div class="rounded-lg bg-slate-50 p-3">
+                        <div class="text-slate-500">工单侧证</div>
+                        <div class="mt-1 font-semibold text-slate-800">${ticketCount}</div>
+                    </div>
+                </div>
+                <div class="rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-3 text-xs leading-6 text-indigo-700">
+                    ${escapeHtml(strategy)}
+                </div>
+                <div>
+                    <div class="text-xs font-medium text-slate-500 mb-2">来源分布</div>
+                    <div class="grid grid-cols-3 gap-2 text-xs">${sourceCards}</div>
+                </div>
+                <div>
+                    <div class="text-xs font-medium text-slate-500 mb-2">相关度分层</div>
+                    <div class="grid grid-cols-3 gap-2 text-xs">
+                        <div class="rounded-lg bg-emerald-50 p-3 text-emerald-700"><div>高相关</div><div class="mt-1 font-semibold text-base">${kbState.relevanceSummary?.high_count || 0}</div></div>
+                        <div class="rounded-lg bg-amber-50 p-3 text-amber-700"><div>中相关</div><div class="mt-1 font-semibold text-base">${kbState.relevanceSummary?.medium_count || 0}</div></div>
+                        <div class="rounded-lg bg-slate-50 p-3 text-slate-600"><div>低相关</div><div class="mt-1 font-semibold text-base">${kbState.relevanceSummary?.low_count || 0}</div></div>
+                    </div>
+                </div>
+                ${topIssueKeys.length ? `
+                    <div class="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-3 text-xs text-emerald-700">
+                        工单侧证摘要：${topIssueKeys.map(escapeHtml).join('、')}
+                    </div>
+                ` : ''}
+                <div>
+                    <div class="text-xs font-medium text-slate-500 mb-2">Topic 命中</div>
+                    <div class="flex flex-wrap gap-2">${topicHtml}</div>
+                </div>
+            `;
+        }
+
+        async function searchKnowledge() {
+            const q = document.getElementById('searchInput').value.trim();
+            if (!q) {
+                showToast('请输入问题', 'warning');
+                return;
+            }
+
+            // 离开浏览模式
+            kbState.browseMode = false;
+            document.getElementById('middlePanelTitle').textContent = '📚 主资料';
+            const existingGrid = document.getElementById('resultList').querySelector('.wiki-card');
+            if (existingGrid) existingGrid.remove();
+
+            kbState.answerHtml = '<div class="text-slate-400">知识库分析中...</div>';
+            kbState.results = [];
+            kbState.allSources = [];
+            kbState.selectedSourceId = '';
+            kbState.detailViewMode = 'content';
+            kbState.detailHtml = '';
+            kbState.queryProfile = null;
+            kbState.relevanceSummary = null;
+            kbState.ticketSummary = null;
+            kbState.sourceCounts = { kb_local: 0, apcom_docs: 0, ticket_case: 0 };
+            kbState.sourceGroups = { kb_local: [], apcom_docs: [], ticket_case: [] };
+            kbState.topicNames = [];
+            kbState.fallbackUsed = false;
+            kbState.queryText = q;
+            kbState.primaryMaterialsOnly = true;
+            kbState.drawerOpen = false;
+            kbState.drawerMode = '';
+            renderDetailPanel();
+            renderOverviewPanel();
+            renderResults([]);
+            renderKbDrawer();
+
+            try {
+                // 1. 先快速搜索获取资料列表 (不等LLM)
+                const searchPromise = fetch(`${API_BASE}/api/kb/search?q=${encodeURIComponent(q)}&top_k=20`).then(r => r.json()).catch(() => null);
+
+                // 2. 同时启动LLM智能分析 (慢)
+                const llmConfig = await getSharedLLMConfig(API_BASE, { allowServerFallback: false });
+                const qaPromise = fetch(`${API_BASE}/api/kb/qa`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        query: q,
+                        mode: 'long',
+                        api_key: llmConfig.apiKey,
+                        provider: llmConfig.provider,
+                        model_name: llmConfig.modelName,
+                        base_url: llmConfig.baseUrl
+                    })
+                }).then(r => r.json());
+
+                // 3. 搜索结果先到先渲染
+                const searchData = await searchPromise;
+                if (searchData && searchData.items && searchData.items.length > 0) {
+                    kbState.results = searchData.items;
+                    kbState.sourceCounts = searchData.sources || kbState.sourceCounts;
+                    kbState.sourceGroups = searchData.source_groups || kbState.sourceGroups;
+                    kbState.queryProfile = searchData.query_profile || null;
+                    kbState.relevanceSummary = searchData.relevance_summary || null;
+                    kbState.selectedSourceId = searchData.items[0]?.content_id || '';
+                    renderResults(kbState.results);
+                    renderOverviewPanel();
+                }
+
+                // 4. 等LLM智能分析结果 (列表已展示)
+                const data = await qaPromise;
+                const { primaryMaterials, ticketItems, displayItems, primaryMaterialsOnly } = buildDisplayResults(data);
+                const ticketSummary = buildTicketSummary(data, ticketItems);
+                const ticketOnlyNotice = !primaryMaterialsOnly && ticketItems.length
+                    ? '<div class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">当前未命中正式资料，以下仅展示历史工单侧证，请结合元数据与正式文档交叉验证。</div>'
+                    : '';
+                kbState.answerText = data.answer || '';
+                kbState.answerHtml = `
+                    <div class="space-y-3">
+                        ${data.fallback_used ? '<div class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">AI 回答已降级为基于命中文档的证据摘要，引用资料仍可继续查看。</div>' : ''}
+                        ${ticketOnlyNotice}
+                        <div class="prose prose-slate max-w-none">${data.answer_html || '<p>未检索到相关知识库内容</p>'}</div>
+                    </div>
+                `;
+                kbState.results = displayItems;
+                kbState.allSources = dedupeItems(Array.isArray(data.sources) ? data.sources : [...primaryMaterials, ...ticketItems]);
+                kbState.selectedSourceId = kbState.results[0]?.content_id || '';
+                kbState.detailViewMode = kbState.results[0]?.source_kind === 'ticket_case' ? 'metadata' : 'content';
+                kbState.queryProfile = data.query_profile || null;
+                kbState.relevanceSummary = data.relevance_summary || { high_count: 0, medium_count: 0, low_count: 0 };
+                kbState.ticketSummary = ticketSummary;
+                kbState.sourceCounts = getSourceCountsFromResponse(data);
+                kbState.sourceGroups = {
+                    kb_local: Array.isArray(data.source_groups?.kb_local) ? data.source_groups.kb_local : [],
+                    apcom_docs: Array.isArray(data.source_groups?.apcom_docs) ? data.source_groups.apcom_docs : [],
+                    ticket_case: Array.isArray(data.source_groups?.ticket_case) ? data.source_groups.ticket_case : ticketItems,
+                };
+                kbState.topicNames = normalizeTopicNames(data.topics);
+                kbState.fallbackUsed = Boolean(data.fallback_used);
+                kbState.primaryMaterialsOnly = primaryMaterialsOnly;
+                renderOverviewPanel();
+                renderResults(kbState.results);
+                kbState.detailHtml = '';
+                renderDetailPanel();
+                renderKbDrawer();
+            } catch (error) {
+                console.error('[KB] qa failed', error);
+                kbState.answerHtml = '<div class="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-600">知识库问答失败，请稍后重试。</div>';
+                kbState.results = [];
+                kbState.allSources = [];
+                kbState.selectedSourceId = '';
+                kbState.detailHtml = '';
+                kbState.sourceCounts = { kb_local: 0, apcom_docs: 0, ticket_case: 0 };
+                kbState.sourceGroups = { kb_local: [], apcom_docs: [], ticket_case: [] };
+                kbState.ticketSummary = null;
+                kbState.relevanceSummary = null;
+                kbState.primaryMaterialsOnly = true;
+                kbState.drawerOpen = false;
+                kbState.drawerMode = '';
+                renderResults([]);
+                renderOverviewPanel();
+                renderKbDrawer();
+                renderDetailPanel();
+            }
+        }
+
+        function renderResults(items) {
+            document.getElementById('resultCount').textContent = `${items.length} 条`;
+            const container = document.getElementById('resultList');
+            if (!items.length) {
+                container.innerHTML = '<div class=”text-slate-400 text-sm text-center py-10”>未找到匹配结果</div>';
+                return;
+            }
+            // Sort: kb_compiled items first (they typically score highest already, but ensure it)
+            const sorted = [...items].sort((a, b) => {
+                if (a.source_kind === 'kb_compiled' && b.source_kind !== 'kb_compiled') return -1;
+                if (b.source_kind === 'kb_compiled' && a.source_kind !== 'kb_compiled') return 1;
+                return 0;
+            });
+            const sideEvidenceNotice = !kbState.primaryMaterialsOnly
+                ? '<div class=”rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 text-xs text-amber-700”>当前列表为”仅历史工单侧证”兜底视图，不代表正式资料结论。</div>'
+                : '';
+            container.innerHTML = `
+                ${sideEvidenceNotice}
+                ${sorted.map(item => {
+                const compiledBadge = item.source_kind === 'kb_compiled'
+                    ? '<span class=”inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-indigo-100 text-indigo-700 mr-1”>综合解析</span>'
+                    : '';
+                return `
+                <div
+                    class=”w-full text-left border rounded-xl p-3 transition cursor-pointer ${kbState.selectedSourceId === item.content_id ? 'border-indigo-400 bg-indigo-50 shadow-sm' : 'border-slate-200 hover:border-indigo-300 hover:bg-indigo-50'}”
+                    onclick=”selectSource('${item.content_id}')”
+                    data-content-id=”${item.content_id}”
+                >
+                    <div class=”flex items-start justify-between gap-3 mb-2”>
+                        <div>
+                            <div class=”font-medium text-slate-800”>${compiledBadge}${escapeHtml(item.name)}</div>
+                            <div class="text-xs text-slate-400 mt-1">${escapeHtml(item.citation_label || item.source_rel_path)}</div>
+                        </div>
+                        <span class="text-[10px] px-2 py-1 rounded-full ${sourceKindBadgeClass(item.source_kind)}">${escapeHtml(formatSourceKind(item.source_kind))}</span>
+                    </div>
+                    <p class="text-xs text-slate-500 mt-2 line-clamp-3">${escapeHtml(item.summary || '')}</p>
+                    <div class="mt-3 flex flex-wrap gap-2 items-center">
+                        ${item.relevance_level ? `<span class="px-2 py-1 rounded-full text-[10px] ${relevanceBadgeClass(item.relevance_level)}">${escapeHtml(formatRelevanceLevel(item.relevance_level))}</span>` : ''}
+                        ${((item.topic_names || []).slice(0, 3)).map(topicName => `<span class="px-2 py-1 rounded-full bg-indigo-50 text-indigo-700 text-[10px]">${escapeHtml(topicName)}</span>`).join('')}
+                    </div>
+                    ${item.relevance_reason ? `<div class="mt-2 text-[11px] text-slate-500 leading-5">${escapeHtml(item.relevance_reason)}</div>` : ''}
+                    <div class="mt-3 flex gap-2" data-detail-actions>
+                        <button
+                            onclick="showDetail('${item.content_id}', 'content', event)"
+                            ${item.source_kind === 'ticket_case' ? 'disabled' : ''}
+                            class="px-3 py-1.5 rounded-lg text-xs ${kbState.selectedSourceId === item.content_id && kbState.detailViewMode === 'content' ? 'bg-indigo-600 text-white hover:bg-indigo-700' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}"
+                        >${item.source_kind === 'ticket_case' ? '仅元数据' : '查看正文'}</button>
+                        <button
+                            onclick="showDetail('${item.content_id}', 'metadata', event)"
+                            class="px-3 py-1.5 rounded-lg text-xs ${kbState.selectedSourceId === item.content_id && kbState.detailViewMode === 'metadata' ? 'bg-indigo-600 text-white hover:bg-indigo-700' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}"
+                        >查看元数据</button>
+                    </div>
+                </div>
+            `; }).join('')}
+            `;
+            renderDrawerControls();
+        }
+
+        async function selectSource(contentId) {
+            if (!contentId) return;
+            kbState.selectedSourceId = contentId;
+            renderResults(kbState.results);
+            renderDetailPanel();
+            if (kbState.drawerOpen && kbState.drawerMode === 'detail') {
+                await showDetail(contentId, kbState.detailViewMode || 'content', null, { openDrawer: true });
+            }
+        }
+
+        async function showDetail(contentId, viewMode = 'content', event = null, options = { openDrawer: true }) {
+            if (event) {
+                event.stopPropagation();
+            }
+            kbState.selectedSourceId = contentId;
+            kbState.detailViewMode = viewMode;
+            renderResults(kbState.results);
+
+            const cacheKey = `${viewMode}:${contentId}`;
+            let item = kbState.detailCache.get(cacheKey);
+            if (!item) {
+                const endpoint = viewMode === 'metadata'
+                    ? `${API_BASE}/api/kb/metadata/${encodeURIComponent(contentId)}`
+                    : `${API_BASE}/api/kb/content/${encodeURIComponent(contentId)}`;
+                const res = await fetch(endpoint);
+                item = await res.json();
+                kbState.detailCache.set(cacheKey, item);
+            }
+            if (item.display_mode === 'metadata_only') {
+                kbState.detailViewMode = 'metadata';
+                renderResults(kbState.results);
+            }
+            const topicHtml = ((item.topic_names || item.topic_ids || []).map(topic => `
+                <span class="px-2 py-1 rounded-full bg-indigo-50 text-indigo-700 text-xs">${escapeHtml(topic)}</span>
+            `).join('')) || '<span class="text-slate-400 text-xs">无</span>';
+            const effectiveViewMode = item.display_mode === 'metadata_only' ? 'metadata' : viewMode;
+            const bodyHtml = effectiveViewMode === 'metadata'
+                    ? `<pre class="text-xs bg-slate-50 rounded-lg p-3 overflow-x-auto whitespace-pre-wrap">${escapeHtml(JSON.stringify(item, null, 2))}</pre>`
+                    : item.display_mode === 'metadata_only'
+                        ? `<div class="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">历史工单在知识库页默认只展示工单编号与元数据，请通过元数据查看来源、标签和模块信息。</div>`
+                        : `<div class="max-h-[320px] overflow-y-auto rounded-lg bg-slate-50 p-3 text-sm text-slate-700 leading-6 whitespace-pre-wrap">${escapeHtml(item.raw_content || item.summary || '')}</div>`;
+
+            kbState.detailHtml = `
+                <div class="space-y-4">
+                    <div>
+                        <div class="text-lg font-semibold text-slate-800">${escapeHtml(item.name)}</div>
+                        <div class="text-xs text-slate-400 mt-1">${escapeHtml(item.citation_label || item.source_rel_path || '')}</div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2 text-xs">
+                        <div class="bg-slate-50 rounded-lg p-2"><strong>一级模块</strong><br>${escapeHtml(item.l1_module || item.l1_name || '-')}</div>
+                        <div class="bg-slate-50 rounded-lg p-2"><strong>二级模块</strong><br>${escapeHtml(item.l2_module || item.l2_name || '-')}</div>
+                        <div class="bg-slate-50 rounded-lg p-2"><strong>文档类型</strong><br>${escapeHtml(item.doc_type || item.ext || '-')}</div>
+                        <div class="bg-slate-50 rounded-lg p-2"><strong>知识源</strong><br>${escapeHtml(item.source_kind || '-')}</div>
+                    </div>
+                    <div>
+                        <div class="font-medium text-slate-700 mb-1">主题</div>
+                        <div class="flex flex-wrap gap-2">${topicHtml}</div>
+                    </div>
+                    <div>
+                        <div class="font-medium text-slate-700 mb-1">文章摘要</div>
+                        <div class="rounded-lg bg-slate-50 p-3 text-sm text-slate-700 leading-6">${escapeHtml(item.summary || '暂无摘要')}</div>
+                    </div>
+                    <div>
+                        <div class="font-medium text-slate-700 mb-1">${effectiveViewMode === 'metadata' ? '元数据' : '正文预览'}</div>
+                        ${bodyHtml}
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                        ${item.display_mode === 'metadata_only'
+                            ? `<button class="px-3 py-2 rounded-lg text-xs bg-slate-100 text-slate-400 cursor-not-allowed" disabled>仅元数据</button>`
+                            : `<button onclick="showDetail('${item.content_id}', 'content')" class="px-3 py-2 rounded-lg text-xs ${effectiveViewMode === 'content' ? 'bg-indigo-600 text-white hover:bg-indigo-700' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}">查看正文</button>`
+                        }
+                        <button onclick="showDetail('${item.content_id}', 'metadata')" class="px-3 py-2 rounded-lg text-xs ${effectiveViewMode === 'metadata' ? 'bg-indigo-600 text-white hover:bg-indigo-700' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}">查看元数据</button>
+                    </div>
+                    <div>
+                        <div class="font-medium text-slate-700 mb-1">关键词</div>
+                        <div class="flex flex-wrap gap-2">
+                            ${(item.keywords || []).map(keyword => `<span class="px-2 py-1 rounded-full bg-slate-100 text-slate-700 text-xs">${escapeHtml(keyword)}</span>`).join('')}
+                        </div>
+                    </div>
+                </div>
+            `;
+            renderDetailPanel();
+            if (options.openDrawer !== false) {
+                kbState.drawerMode = 'detail';
+                kbState.drawerOpen = true;
+                renderKbDrawer();
+            } else {
+                renderDrawerControls();
+            }
+        }
+
+        function renderDetailPanel() {
+            const analysisWrap = document.getElementById('analysisPanel');
+            const detailPanel = document.getElementById('detailPanel');
+            if (!analysisWrap || !detailPanel) return;
+
+            // 无问题（浏览模式/初始态）→ 整块隐藏
+            if (!kbState.queryText) {
+                analysisWrap.classList.add('hidden');
+                detailPanel.innerHTML = '';
+                return;
+            }
+
+            const queryIntent = kbState.queryProfile?.query_intent || 'mixed';
+            const selectedItem = getSelectedItem();
+            const summaryChips = `
+                <div class="grid grid-cols-2 gap-2 text-xs">
+                    <div class="rounded-lg bg-white/70 p-3"><div class="text-slate-500">查询意图</div><div class="mt-1 font-semibold text-slate-800"><code>${escapeHtml(queryIntent)}</code> ${escapeHtml(formatQueryIntent(queryIntent))}</div></div>
+                    <div class="rounded-lg bg-white/70 p-3"><div class="text-slate-500">工单侧证</div><div class="mt-1 font-semibold text-slate-800">${Number(kbState.ticketSummary?.related_count || 0)}</div></div>
+                </div>
+            `;
+            const drawerHint = selectedItem ? `
+                <div class="rounded-lg border border-indigo-200 bg-white/60 px-3 py-2 text-xs text-indigo-700 leading-5">
+                    当前已选中资料：${escapeHtml(selectedItem.name || selectedItem.citation_label || selectedItem.content_id)}。通过右侧“证据详情 / 深层证据”按钮查看详情。
+                </div>
+            ` : '';
+            const saveBtn = kbState.answerText ? `
+                <button
+                    onclick="saveAnswerToKb()"
+                    class="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 transition"
+                >💾 保存到知识库</button>
+            ` : '';
+            detailPanel.innerHTML = `
+                <div class="space-y-3">
+                    ${summaryChips}
+                    <div>
+                        <div class="font-medium text-slate-700 mb-1 text-xs">知识库回答</div>
+                        <div class="prose prose-slate max-w-none text-sm text-slate-700">${kbState.answerHtml || '<p class="text-slate-400">知识库分析中...</p>'}</div>
+                        ${saveBtn}
+                    </div>
+                    ${drawerHint}
+                </div>
+            `;
+            analysisWrap.classList.remove('hidden');
+            // 重置为展开态
+            const icon = document.getElementById('analysisToggleIcon');
+            if (icon) icon.textContent = '收起 ▲';
+            detailPanel.classList.remove('hidden');
+        }
+
+        function toggleAnalysisPanel() {
+            const detailPanel = document.getElementById('detailPanel');
+            const icon = document.getElementById('analysisToggleIcon');
+            if (!detailPanel) return;
+            if (detailPanel.classList.contains('hidden')) {
+                detailPanel.classList.remove('hidden');
+                if (icon) icon.textContent = '收起 ▲';
+            } else {
+                detailPanel.classList.add('hidden');
+                if (icon) icon.textContent = '展开 ▼';
+            }
+        }
+
+        async function saveAnswerToKb() {
+            const topic = kbState.queryText;
+            const content = kbState.answerText;
+            if (!topic || !content) {
+                showToast('没有可保存的回答内容', 'warning');
+                return;
+            }
+            try {
+                const res = await fetch(`${API_BASE}/api/kb/compile`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ topic, content })
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) {
+                    showToast(`保存失败: ${data.detail || data.message || res.status}`, 'error');
+                    return;
+                }
+                const jobId = data.job_id;
+                if (!jobId) {
+                    showToast('✅ 已保存到知识库', 'success');
+                    return;
+                }
+                showToast('编译中，稍后自动完成…', 'info');
+                // Poll until done or failed (max 90s)
+                const deadline = Date.now() + 90000;
+                const poll = async () => {
+                    if (Date.now() > deadline) {
+                        showToast('仍在后台编译，可稍后刷新查看', 'info');
+                        return;
+                    }
+                    try {
+                        const jr = await fetch(`${API_BASE}/api/kb/jobs/${jobId}`);
+                        const job = await jr.json().catch(() => ({}));
+                        if (job.status === 'done') {
+                            showToast('✅ 已保存到知识库', 'success');
+                        } else if (job.status === 'failed') {
+                            showToast(`保存失败: ${job.error || '编译无结果'}`, 'error');
+                        } else {
+                            setTimeout(poll, 2000);
+                        }
+                    } catch (_) {
+                        setTimeout(poll, 2000);
+                    }
+                };
+                setTimeout(poll, 2000);
+            } catch (e) {
+                showToast(`保存失败: ${e.message}`, 'error');
+            }
+        }
+
+        async function syncKnowledge() {
+            const syncButton = document.getElementById('syncButton');
+            const originalLabel = syncButton?.textContent?.trim() || '同步';
+            if (syncButton?.disabled) {
+                return;
+            }
+
+            try {
+                if (syncButton) {
+                    syncButton.disabled = true;
+                    syncButton.textContent = '同步中...';
+                }
+
+                const res = await fetch(`${API_BASE}/api/kb/sync`, { method: 'POST' });
+                let payload = null;
+                try {
+                    payload = await res.json();
+                } catch (error) {
+                    payload = null;
+                }
+
+                if (!res.ok) {
+                    const detail = payload?.detail || payload?.message || `HTTP ${res.status}`;
+                    throw new Error(detail);
+                }
+
+                await loadManifest();
+                const localCount = payload?.local_manifest_count ?? manifestData?.sources?.kb_local?.count ?? 0;
+                showToast(`知识库同步完成，本地资料 ${localCount} 条`, 'success');
+            } catch (error) {
+                console.error('[KB] 同步失败:', error);
+                showToast(`同步失败: ${error?.message || '请稍后重试'}`, 'error');
+            } finally {
+                if (syncButton) {
+                    syncButton.disabled = false;
+                    syncButton.textContent = originalLabel;
+                }
+            }
+        }
+
+        // nav.js loaded externally
+
+        function escapeHtml(value) {
+            return String(value || '')
+                .replaceAll('&', '&amp;')
+                .replaceAll('<', '&lt;')
+                .replaceAll('>', '&gt;');
+        }
+
+        // ════════════════════════════════════════════
+        // 浏览模式：Wiki 导览功能
+        // ════════════════════════════════════════════
+
+        function renderWikiBrowseMode() {
+            const list = document.getElementById('resultList');
+            if (!list) return;
+            const articles = kbState.compiledArticles;
+            if (articles.length === 0) {
+                list.innerHTML = '<div class="text-slate-400 text-sm text-center py-10">暂无编译内容，请先运行知识库批量编译</div>';
+                return;
+            }
+            list.innerHTML = articles.map(renderWikiCard).join('');
+            document.getElementById('resultCount').textContent = `${articles.length} 篇`;
+        }
+
+        function renderWikiCard(item) {
+            const title = (item.name || '').replace(/^综合解析[：:]\s*/, '');
+            // 优先取"定义与背景"段，其次取 summary
+            let excerpt = '';
+            if (item.content) {
+                const bgMatch = item.content.match(/##\s*定义与背景[\s\S]*?\n+([\s\S]+?)(?=\n##|\n---|\n$|$)/);
+                if (bgMatch) excerpt = bgMatch[1].replace(/[#*`>]/g, '').trim().slice(0, 140);
+            }
+            if (!excerpt) excerpt = (item.summary || '[暂无摘要]').slice(0, 140);
+
+            const related = item.related_topics || [];
+            const chips = related.slice(0, 3).map(t =>
+                `<span class="wiki-chip" onclick="event.stopPropagation();searchFromChip('${escapeHtml(t)}')">${escapeHtml(t)}</span>`
+            ).join('');
+
+            return `<div class="wiki-card" onclick="openWikiArticle('${escapeHtml(item.content_id)}')">
+                <div class="wiki-card-title">${escapeHtml(title)}</div>
+                <div class="wiki-card-excerpt">${escapeHtml(excerpt)}</div>
+                ${chips ? `<div class="wiki-card-chips">${chips}</div>` : ''}
+            </div>`;
+        }
+
+        function openWikiArticle(nameOrId) {
+            const item = kbState.compiledArticles.find(a =>
+                a.content_id === nameOrId ||
+                (a.source_rel_path || '').includes(nameOrId) ||
+                a.title === nameOrId ||
+                (a.name || '').replace(/^综合解析[：:]\s*/, '') === nameOrId
+            );
+            if (!item) return;
+            kbState.activeWikiArticle = item;
+            openKbDrawer('wiki_article');
+            setTimeout(() => renderWikiArticle(item), 100);
+        }
+
+        function renderWikiArticle(item) {
+            // 所有文章详情改为在抽屉中展示（删除了第三列 detailPanel）
+            const panel = document.getElementById('kbDrawerBody');
+            if (!panel) {
+                // fallback: 打开抽屉再渲染
+                openKbDrawer('wiki_article');
+                setTimeout(() => renderWikiArticle(item), 200);
+                return;
+            }
+            if (!item) {
+                panel.innerHTML = '<div class="text-slate-400 text-sm text-center py-10">点击知识导览卡片查看详情</div>';
+                return;
+            }
+            const title = (item.name || '').replace(/^综合解析[：:]\s*/, '');
+            const sections = parseWikiSections(item.content || '');
+            const related = item.related_topics || [];
+
+            let body = '';
+            if (sections.length > 0) {
+                body = sections.map(s => `
+                    <div class="wiki-section-head">${escapeHtml(s.icon)} ${escapeHtml(s.title)}</div>
+                    <div class="wiki-article">${(typeof marked !== 'undefined' ? marked.parse(s.content) : escapeHtml(s.content).replace(/\n/g, '<br>'))}</div>
+                `).join('');
+            } else if (item.content) {
+                body = `<div class="wiki-article">${(typeof marked !== 'undefined' ? marked.parse(item.content) : escapeHtml(item.content).replace(/\n/g, '<br>'))}</div>`;
+            } else if (item.summary) {
+                body = `<div class="wiki-article"><p>${escapeHtml(item.summary)}</p></div>`;
+            }
+
+            const chips = related.map(t =>
+                `<button class="wiki-chip" onclick="searchFromChip('${escapeHtml(t)}')">${escapeHtml(t)}</button>`
+            ).join('');
+
+            // ── 参考资料链接（从 summary 解析来源文档，可点击打开详情）──
+            let refsHtml = '';
+            const refMatch = (item.summary || '').match(/来源：(.+)/);
+            if (refMatch) {
+                const refNames = refMatch[1].split(/[,，]/).map(s => s.replace(/^\d+\.\s*/, '').trim()).filter(Boolean);
+                if (refNames.length > 0) {
+                    refsHtml = `<div class="wiki-refs" style="margin-top:16px;padding:12px;background:#f8fafc;border-radius:8px;border:1px solid #e2e8f0">
+                        <div style="font-size:12px;color:#94a3b8;margin-bottom:8px">📚 参考资料</div>
+                        ${refNames.map(name => `<button class="wiki-ref-link" onclick="openKbSource('${escapeHtml(name)}')"
+                            style="display:inline-block;margin:3px;padding:4px 10px;font-size:12px;color:#4f46e5;background:#eef2ff;border:1px solid #c7d2fe;border-radius:6px;cursor:pointer;transition:all .15s"
+                            onmouseover="this.style.background='#ddd6fe'" onmouseout="this.style.background='#eef2ff'"
+                            title="点击查看原文">📄 ${escapeHtml(name)}</button>`).join('')}
+                    </div>`;
+                }
+            }
+
+            // ── 知识图谱（从 topic tree 计算直接/间接关联）──
+            let graphHtml = '';
+            const allTopics = (manifestData.topics || []);
+            if (allTopics.length > 0) {
+                const topicName = title;
+                const { directRels, indirectRels } = buildTopicGraph(topicName, allTopics);
+                const allRels = [...directRels.map(r => ({...r, type: 'direct'})), ...indirectRels.map(r => ({...r, type: 'indirect'}))];
+                if (allRels.length > 0) {
+                    graphHtml = `<div class="wiki-graph" style="margin-top:16px;padding:14px;background:#fafafa;border-radius:10px;border:1px solid #e5e7eb">
+                        <div style="font-size:12px;color:#94a3b8;margin-bottom:10px">🔗 知识图谱</div>
+                        <div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;justify-content:center">
+                            ${allRels.map(r => {
+                                const isCompiled = kbState.compiledArticles.some(a => (a.name || '').includes(r.name) || (a.source_rel_path || '').includes(r.name));
+                                const borderColor = r.type === 'direct' ? '#818cf8' : '#d1d5db';
+                                const bg = isCompiled ? (r.type === 'direct' ? '#eef2ff' : '#f9fafb') : '#fff';
+                                const cursor = isCompiled ? 'pointer' : 'default';
+                                const opacity = isCompiled ? '1' : '0.6';
+                                const onclick = isCompiled ? `onclick="navigateToWikiTopic('${escapeHtml(r.name)}')"` : '';
+                                const relLabel = r.relation === 'parent' ? '⬆ 上级' : r.relation === 'child' ? '⬇ 子级' : r.relation === 'sibling' ? '↔ 同级' : '〰 关联';
+                                return `<div ${onclick} style="display:inline-flex;flex-direction:column;align-items:center;padding:6px 12px;border:1.5px solid ${borderColor};border-radius:8px;background:${bg};cursor:${cursor};opacity:${opacity};transition:all .15s;font-size:12px;min-width:70px"
+                                    ${isCompiled ? 'onmouseover="this.style.transform=\'scale(1.05)\';this.style.boxShadow=\'0 2px 8px rgba(0,0,0,.1)\'" onmouseout="this.style.transform=\'scale(1)\';this.style.boxShadow=\'none\'"' : ''}>
+                                    <span style="color:#64748b;font-size:10px">${relLabel}</span>
+                                    <span style="color:#1e293b;font-weight:500">${escapeHtml(r.name)}</span>
+                                    ${isCompiled ? '<span style="font-size:9px;color:#4f46e5">📖 已编译</span>' : '<span style="font-size:9px;color:#94a3b8">未编译</span>'}
+                                </div>`;
+                            }).join(`<span style="color:#d1d5db;font-size:10px">──</span>`)}
+                        </div>
+                        <div style="margin-top:8px;text-align:center">
+                            <span style="display:inline-block;width:10px;height:10px;border:1.5px solid #818cf8;border-radius:3px;margin-right:2px"></span><span style="font-size:10px;color:#94a3b8">直接关联</span>
+                            <span style="display:inline-block;width:10px;height:10px;border:1.5px solid #d1d5db;border-radius:3px;margin-left:8px;margin-right:2px"></span><span style="font-size:10px;color:#94a3b8">间接关联</span>
+                        </div>
+                    </div>`;
+                }
+            }
+
+            panel.innerHTML = `
+                <div class="wiki-article-title">${escapeHtml(title)}</div>
+                <div class="wiki-article-meta">综合解析 · 由 KB 编译</div>
+                ${body}
+                ${refsHtml}
+                ${graphHtml}
+                ${chips ? `<div class="wiki-related"><span class="text-xs text-slate-400 mr-1">相关：</span>${chips}</div>` : ''}
+            `;
+        }
+
+        // ── 知识图谱：从 topic tree 构建关联关系 ──
+        function buildTopicGraph(topicName, allTopics) {
+            const directRels = [];
+            const indirectRels = [];
+            // 扁平化 topic tree（递归展开 children）
+            const flat = [];
+            function flatten(topics, parent) {
+                for (const t of topics) {
+                    flat.push({ name: t.name, level: t.level || 0, parent: parent });
+                    if (t.children && t.children.length > 0) flatten(t.children, t.name);
+                }
+            }
+            flatten(allTopics, null);
+
+            const self = flat.find(t => t.name === topicName);
+            if (!self) return { directRels, indirectRels };
+
+            // 直接关联：parent, children, siblings
+            if (self.parent) {
+                directRels.push({ name: self.parent, relation: 'parent' });
+            }
+            for (const t of flat) {
+                if (t.parent === topicName) {
+                    directRels.push({ name: t.name, relation: 'child' });
+                }
+                if (self.parent && t.parent === self.parent && t.name !== topicName) {
+                    directRels.push({ name: t.name, relation: 'sibling' });
+                }
+            }
+
+            // 间接关联：从文章"相关概念"段落提取
+            const article = kbState.compiledArticles.find(a =>
+                (a.name || '').includes(topicName) || (a.source_rel_path || '').includes(topicName)
+            );
+            if (article && article.content) {
+                const relMatch = article.content.match(/##\s*相关概念[^\n]*\n([\s\S]*?)(?=\n##|$)/);
+                if (relMatch) {
+                    const mentioned = relMatch[1].replace(/[、，,]/g, '|').split('|').map(s => s.trim()).filter(Boolean);
+                    for (const m of mentioned) {
+                        if (m !== topicName && !directRels.some(d => d.name === m)) {
+                            indirectRels.push({ name: m, relation: 'mentioned' });
+                        }
+                    }
+                }
+            }
+
+            return { directRels: directRels.slice(0, 8), indirectRels: indirectRels.slice(0, 6) };
+        }
+
+        // ── 知识图谱：点击节点跳转到对应 wiki 文章 ──
+        function navigateToWikiTopic(topicName) {
+            const article = kbState.compiledArticles.find(a =>
+                (a.name || '').includes(topicName) || (a.source_rel_path || '').includes(topicName)
+            );
+            if (article) {
+                kbState.activeWikiArticle = article;
+                openKbDrawer('wiki_article');
+                setTimeout(() => renderWikiArticle(article), 100);
+                // 高亮卡片
+                document.querySelectorAll('.wiki-card').forEach(c => c.classList.remove('wiki-card-active'));
+                document.querySelectorAll('.wiki-card').forEach(c => { if (c.textContent.includes(topicName)) c.classList.add('wiki-card-active'); });
+            }
+        }
+
+        // ── 参考资料：点击打开 KB 原文抽屉 ──
+        async function openKbSource(sourceName) {
+            openKbDrawer('kb_source');
+            await new Promise(r => setTimeout(r, 100));
+            const panel = document.getElementById('kbDrawerBody');
+            if (!panel) return;
+            // 在 manifest 中查找匹配的条目
+            const items = (manifestData.items || []).filter(i =>
+                (i.name || '') === sourceName || (i.name || '').includes(sourceName)
+            );
+            if (items.length > 0) {
+                const item = items[0];
+                const contentId = item.content_id || item.name;
+                try {
+                    const _allowedPfx = ((window.INSTANCE_CONFIG || {}).allowed_project_keys || []).map(k => k + '-');
+                    const _isTicketKey = _allowedPfx.some(p => contentId.startsWith(p)) || contentId.startsWith('TICKET-');
+                    const endpoint = _isTicketKey
+                        ? `${API_BASE}/api/kb/metadata/${encodeURIComponent(contentId)}`
+                        : `${API_BASE}/api/kb/content/${encodeURIComponent(contentId)}`;
+                    const res = await fetch(endpoint);
+                    if (res.ok) {
+                        const data = await res.json();
+                        const content = data.content || data.chunk_text || data.raw_content || item.summary || '无内容';
+                        const rendered = typeof marked !== 'undefined' ? marked.parse(content) : content.replace(/\n/g, '<br>');
+                        panel.innerHTML = `
+                            <div class="wiki-article-title">📄 ${escapeHtml(sourceName)}</div>
+                            <div class="wiki-article-meta">KB 原始资料 · <button onclick="openWikiArticle(kbState.activeWikiArticle?.content_id)" style="color:#4f46e5;cursor:pointer;text-decoration:underline;background:none;border:none;font-size:inherit">← 返回编译页</button></div>
+                            <div class="wiki-article">${rendered}</div>
+                        `;
+                        return;
+                    }
+                } catch (e) { /* fallback below */ }
+            }
+            // 搜索兜底
+            try {
+                const searchRes = await fetch(`${API_BASE}/api/kb/search?q=${encodeURIComponent(sourceName)}&top_k=1`);
+                const searchData = await searchRes.json();
+                const hit = (searchData.items || [])[0];
+                if (hit) {
+                    const content = hit.chunk_text || hit.raw_content || hit.summary || '无内容';
+                    const rendered = typeof marked !== 'undefined' ? marked.parse(content) : content.replace(/\n/g, '<br>');
+                    panel.innerHTML = `
+                        <div class="wiki-article-title">📄 ${escapeHtml(sourceName)}</div>
+                        <div class="wiki-article-meta">KB 搜索结果 · <button onclick="openWikiArticle(kbState.activeWikiArticle?.content_id)" style="color:#4f46e5;cursor:pointer;text-decoration:underline;background:none;border:none;font-size:inherit">← 返回编译页</button></div>
+                        <div class="wiki-article">${rendered}</div>
+                    `;
+                } else {
+                    panel.innerHTML = `<div class="text-slate-400 text-sm text-center py-10">未找到「${escapeHtml(sourceName)}」的内容</div>`;
+                }
+            } catch (e) {
+                panel.innerHTML = `<div class="text-red-400 text-sm text-center py-10">加载失败: ${escapeHtml(e.message)}</div>`;
+            }
+        }
+
+        function parseWikiSections(text) {
+            if (!text) return [];
+            const SECTION_ICONS = {
+                '定义': '📋', '背景': '📋', '概述': '📋',
+                '现状': '⚙️', '系统': '⚙️', '功能': '⚙️', '配置': '⚙️',
+                '限制': '🚧', '问题': '🚧', '注意': '🚧', '风险': '🚧',
+                '场景': '💡', '示例': '💡', '案例': '💡',
+                '相关': '🔗', '关联': '🔗',
+            };
+            const parts = text.split(/\n(?=## )/);
+            const sections = [];
+            for (const part of parts) {
+                const headMatch = part.match(/^## (.+)/);
+                if (!headMatch) continue;
+                const headTitle = headMatch[1].trim();
+                const content = part.replace(/^## .+\n?/, '').trim();
+                if (!content) continue;
+                let icon = '📄';
+                for (const [key, ic] of Object.entries(SECTION_ICONS)) {
+                    if (headTitle.includes(key)) { icon = ic; break; }
+                }
+                sections.push({ title: headTitle, icon, content });
+            }
+            return sections;
+        }
+
+        function renderTopicNavigator(topics) {
+            const container = document.getElementById('topicNavTree');
+            if (!container) return;
+            if (!topics || topics.length === 0) {
+                container.innerHTML = '<div class="text-xs text-slate-400 py-2">暂无话题数据</div>';
+                return;
+            }
+
+            // 按 level 分组：level=0 为顶层模块
+            const roots = topics.filter(t => (t.level || 0) === 0);
+            const children = topics.filter(t => (t.level || 0) > 0);
+
+            function isCompiled(topicName) {
+                return kbState.compiledArticles.some(a =>
+                    (a.source_rel_path || '').includes(topicName) ||
+                    (a.name || '').includes(topicName)
+                );
+            }
+
+            if (roots.length === 0) {
+                // fallback: flat list
+                container.innerHTML = topics.slice(0, 20).map(t => {
+                    const compiled = isCompiled(t.name);
+                    return `<div class="topic-tree-item ${compiled ? 'compiled' : ''}"
+                        onclick="${compiled ? `openWikiArticle('${escapeHtml(t.name)}')` : `openTopicAsKbItem('${escapeHtml(t.name)}')`}"
+                        title="${compiled ? '点击查看综合解析' : '点击查看原始资料'}">
+                        ${compiled ? '●' : '○'} ${escapeHtml(t.name)}
+                    </div>`;
+                }).join('');
+                return;
+            }
+
+            container.innerHTML = roots.map((root, idx) => {
+                const groupId = `topic-group-${idx}`;
+                // children whose parent topic_id starts with root.topic_id or are in sub-level
+                const kids = children.filter(c =>
+                    (c.topic_id || '').startsWith((root.topic_id || '') + '.') ||
+                    (c.topic_id || '').startsWith((root.topic_id || '') + '-')
+                ).slice(0, 8);
+                const kidHtml = kids.map(t => {
+                    const compiled = isCompiled(t.name);
+                    return `<div class="topic-tree-item ${compiled ? 'compiled' : ''}"
+                        onclick="${compiled ? `openWikiArticle('${escapeHtml(t.name)}')` : `openTopicAsKbItem('${escapeHtml(t.name)}')`}"
+                        title="${compiled ? '点击查看综合解析' : '点击查看原始资料'}">
+                        ${compiled ? '●' : '○'} ${escapeHtml(t.name)}
+                    </div>`;
+                }).join('');
+                return `<div>
+                    <div class="topic-group-header" onclick="toggleTopicGroup('${groupId}')">
+                        <span id="${groupId}-arrow">▸</span>
+                        <span>${escapeHtml(root.name)}</span>
+                    </div>
+                    <div id="${groupId}" class="topic-group-children hidden">${kidHtml}</div>
+                </div>`;
+            }).join('');
+        }
+
+        function toggleTopicGroup(groupId) {
+            const el = document.getElementById(groupId);
+            const arrow = document.getElementById(groupId + '-arrow');
+            if (!el) return;
+            el.classList.toggle('hidden');
+            if (arrow) arrow.textContent = el.classList.contains('hidden') ? '▸' : '▾';
+        }
+
+        function searchFromChip(topicName) {
+            const si = document.getElementById('searchInput');
+            if (si) si.value = topicName;
+            searchKnowledge();
+        }
+
+        function searchFromTopic(topicName) {
+            const si = document.getElementById('searchInput');
+            if (si) si.value = topicName;
+            searchKnowledge();
+        }
+
+        // ── 话题树点击：优先打开 kb_local / apcom_docs 原文，兜底搜索 ──
+        async function openTopicAsKbItem(topicName) {
+            try {
+                const res = await fetch(`${API_BASE}/api/kb/search?q=${encodeURIComponent(topicName)}&top_k=8`);
+                const data = await res.json();
+                const allItems = data.items || [];
+                // 过滤掉 ticket_case，按 content_id 去重
+                const seen = new Set();
+                const items = allItems.filter(i => {
+                    if (i.source_kind === 'ticket_case') return false;
+                    if (seen.has(i.content_id)) return false;
+                    seen.add(i.content_id);
+                    return true;
+                });
+                if (items.length === 0) {
+                    searchFromTopic(topicName);
+                } else if (items.length === 1) {
+                    openKbItemArticle(items[0]);
+                } else {
+                    renderKbItemPicker(topicName, items);
+                }
+            } catch (e) {
+                searchFromTopic(topicName);
+            }
+        }
+
+        async function openKbItemArticle(item) {
+            openKbDrawer('kb_source');
+            await new Promise(r => setTimeout(r, 100));
+            const panel = document.getElementById('kbDrawerBody');
+            if (!panel) return;
+            try {
+                const res = await fetch(`${API_BASE}/api/kb/content/${encodeURIComponent(item.content_id)}`);
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const data = await res.json();
+                // raw_content 对 PDF/二进制文件为空，改用 chunks 拼全文
+                const chunks = Array.isArray(data.chunks) ? data.chunks : [];
+                const content = data.raw_content
+                    || (chunks.length > 0 ? chunks.map(c => c.chunk_text || c.chunk_preview || '').join('\n\n') : '')
+                    || data.summary || '';
+                const sourceLabel = item.source_kind === 'kb_local' ? '本地知识库'
+                    : item.source_kind === 'apcom_docs' ? 'APCOM 文档' : item.source_kind;
+                // 复用 renderWikiArticle 渲染 Markdown，构造伪 article 对象
+                const article = {
+                    name: item.name || data.name || item.content_id,
+                    content,
+                    summary: data.summary || item.summary || '',
+                    related_topics: data.topic_names || item.topic_names || [],
+                    _sourceLabel: sourceLabel,
+                    _sourceRel: item.source_rel_path || data.source_rel_path || '',
+                };
+                kbState.activeWikiArticle = null;
+                renderWikiArticle(article);
+                // 在文章头部插入来源元信息
+                const metaBar = document.createElement('div');
+                metaBar.className = 'wiki-article-meta';
+                metaBar.style.cssText = 'font-size:11px;color:#94a3b8;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid #f1f5f9';
+                metaBar.innerHTML = `📄 原始资料 · <span style="color:#4f46e5">${escapeHtml(sourceLabel)}</span>`
+                    + (article._sourceRel ? ` · <span style="color:#64748b">${escapeHtml(article._sourceRel)}</span>` : '');
+                panel.insertBefore(metaBar, panel.firstChild);
+            } catch (e) {
+                panel.innerHTML = `<div class="text-red-400 text-sm text-center py-10">加载失败: ${escapeHtml(e.message)}</div>`;
+            }
+        }
+
+        function renderKbItemPicker(topicName, items) {
+            openKbDrawer('kb_source');
+            setTimeout(() => {
+                const panel = document.getElementById('kbDrawerBody');
+                if (!panel) return;
+                const SOURCE_LABEL = { kb_local: '本地知识库', apcom_docs: 'APCOM 文档', kb_compiled: '综合解析' };
+                const SOURCE_COLOR = { kb_local: '#4f46e5', apcom_docs: '#0891b2', kb_compiled: '#7c3aed' };
+                const rows = items.map(i => {
+                    const label = SOURCE_LABEL[i.source_kind] || i.source_kind;
+                    const color = SOURCE_COLOR[i.source_kind] || '#64748b';
+                    const safeItem = encodeURIComponent(JSON.stringify({
+                        content_id: i.content_id, source_kind: i.source_kind,
+                        name: i.name, source_rel_path: i.source_rel_path || ''
+                    }));
+                    return `<div onclick="openKbItemArticle(JSON.parse(decodeURIComponent('${safeItem}')))"
+                        style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-radius:8px;cursor:pointer;transition:background .1s"
+                        onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=''">
+                        <span style="flex-shrink:0;font-size:10px;padding:2px 7px;border-radius:10px;background:${color}1a;color:${color};border:1px solid ${color}40">${escapeHtml(label)}</span>
+                        <div style="min-width:0">
+                            <div style="font-size:13px;color:#1e293b;font-weight:500;line-height:1.4">${escapeHtml(i.name || i.content_id)}</div>
+                            ${i.source_rel_path ? `<div style="font-size:11px;color:#94a3b8;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(i.source_rel_path)}</div>` : ''}
+                        </div>
+                    </div>`;
+                }).join('<div style="height:1px;background:#f1f5f9;margin:0 12px"></div>');
+                panel.innerHTML = `
+                    <div style="padding:12px 12px 8px;font-size:13px;color:#64748b;border-bottom:1px solid #f1f5f9;margin-bottom:4px">
+                        「${escapeHtml(topicName)}」命中 <strong style="color:#1e293b">${items.length}</strong> 篇资料
+                    </div>
+                    ${rows}
+                `;
+            }, 100);
+        }
+
+    </script>
+    <script src="/assets/project-context.js"></script>
+  <script src="/assets/nav.js"></script>
+    </div><!-- end ds-main -->
+    <script src="/assets/ds/theme.js"></script>
+    <script src="/assets/ds/sidebar.js"></script>
+    <script src="/assets/ds/command-palette.js"></script>
+    <script src="/assets/scope-switcher.js"></script>
+    <script>ScopeSwitcher.init();</script>
+</body>
+
+</html>

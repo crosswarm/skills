@@ -1,0 +1,655 @@
+/* ===================================================================
+   components.css - 通用UI组件样式
+   使用 ds token 变量，支持亮/暗色自动切换
+   =================================================================== */
+
+/* =================================================================
+   Card 卡片
+   ================================================================= */
+.ds-card {
+  background: var(--ds-bg-surface);
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius-lg);
+  box-shadow: var(--ds-shadow-xs);
+  padding: var(--ds-space-4);
+}
+.ds-card-raised {
+  background: var(--ds-bg-surface-raised);
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius-lg);
+  box-shadow: var(--ds-shadow-md);
+  padding: var(--ds-space-4);
+}
+.ds-card-interactive {
+  background: var(--ds-bg-surface);
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius-lg);
+  box-shadow: var(--ds-shadow-xs);
+  padding: var(--ds-space-4);
+  cursor: pointer;
+  transition: box-shadow var(--ds-transition-fast),
+              transform var(--ds-transition-fast),
+              border-color var(--ds-transition-fast);
+}
+.ds-card-interactive:hover {
+  box-shadow: var(--ds-shadow-md);
+  border-color: var(--ds-border-emphasis);
+  transform: translateY(-1px);
+}
+.ds-card-flush {
+  background: var(--ds-bg-surface);
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius-lg);
+  box-shadow: var(--ds-shadow-xs);
+  padding: 0;
+  overflow: hidden;
+}
+
+/* Glass morphism */
+.ds-glass {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+[data-theme="dark"] .ds-glass {
+  background: rgba(26, 34, 51, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* =================================================================
+   Button 按钮
+   ================================================================= */
+.ds-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--ds-space-2);
+  padding: var(--ds-space-2) var(--ds-space-4);
+  font-size: var(--ds-text-sm);
+  font-weight: var(--ds-font-medium);
+  line-height: 1;
+  min-height: var(--ds-touch-min);
+  border-radius: var(--ds-radius-md);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all var(--ds-transition-fast);
+  white-space: nowrap;
+  user-select: none;
+}
+.ds-btn:active {
+  transform: scale(0.97);
+}
+.ds-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Primary */
+.ds-btn-primary {
+  background: var(--ds-accent);
+  color: var(--ds-text-inverse);
+  border-color: var(--ds-accent);
+}
+.ds-btn-primary:hover:not(:disabled) {
+  background: var(--ds-accent-hover);
+  border-color: var(--ds-accent-hover);
+}
+
+/* Secondary */
+.ds-btn-secondary {
+  background: var(--ds-bg-surface);
+  color: var(--ds-text-primary);
+  border-color: var(--ds-border);
+}
+.ds-btn-secondary:hover:not(:disabled) {
+  background: var(--ds-bg-muted);
+  border-color: var(--ds-border-emphasis);
+}
+
+/* Ghost */
+.ds-btn-ghost {
+  background: transparent;
+  color: var(--ds-text-secondary);
+  border-color: transparent;
+}
+.ds-btn-ghost:hover:not(:disabled) {
+  background: var(--ds-bg-muted);
+  color: var(--ds-text-primary);
+}
+
+/* Danger */
+.ds-btn-danger {
+  background: var(--ds-danger);
+  color: #ffffff;
+  border-color: var(--ds-danger);
+}
+.ds-btn-danger:hover:not(:disabled) {
+  background: var(--ds-danger-text);
+  border-color: var(--ds-danger-text);
+}
+
+/* Outline */
+.ds-btn-outline {
+  background: transparent;
+  color: var(--ds-accent-text);
+  border-color: var(--ds-accent);
+}
+.ds-btn-outline:hover:not(:disabled) {
+  background: var(--ds-accent-subtle);
+}
+
+/* Small */
+.ds-btn-sm {
+  padding: var(--ds-space-1) var(--ds-space-3);
+  font-size: var(--ds-text-xs);
+  min-height: 32px;
+}
+
+/* Extra small */
+.ds-btn-xs {
+  padding: 2px 8px;
+  font-size: 11px;
+  min-height: 22px;
+  line-height: 1.4;
+}
+
+/* Icon button */
+.ds-btn-icon {
+  padding: var(--ds-space-2);
+  min-width: var(--ds-touch-min);
+}
+
+/* =================================================================
+   Badge 徽章
+   ================================================================= */
+.ds-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ds-space-1);
+  padding: 2px var(--ds-space-2);
+  font-size: var(--ds-text-xs);
+  font-weight: var(--ds-font-medium);
+  line-height: 1.5;
+  border-radius: var(--ds-radius-full);
+  white-space: nowrap;
+}
+.ds-badge-default {
+  background: var(--ds-bg-muted);
+  color: var(--ds-text-secondary);
+}
+.ds-badge-accent {
+  background: var(--ds-accent-subtle);
+  color: var(--ds-accent-text);
+}
+.ds-badge-success {
+  background: var(--ds-success-subtle);
+  color: var(--ds-success-text);
+}
+.ds-badge-warning {
+  background: var(--ds-warning-subtle);
+  color: var(--ds-warning-text);
+}
+.ds-badge-danger {
+  background: var(--ds-danger-subtle);
+  color: var(--ds-danger-text);
+}
+.ds-badge-info {
+  background: var(--ds-info-subtle);
+  color: var(--ds-info-text);
+}
+
+/* =================================================================
+   Form Controls 表单控件
+   ================================================================= */
+.ds-input,
+.ds-select,
+.ds-textarea {
+  display: block;
+  width: 100%;
+  padding: var(--ds-space-2) var(--ds-space-3);
+  font-size: var(--ds-text-base);
+  font-family: var(--ds-font);
+  line-height: var(--ds-leading-normal);
+  color: var(--ds-text-primary);
+  background: var(--ds-bg-surface);
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius-md);
+  transition: border-color var(--ds-transition-fast),
+              box-shadow var(--ds-transition-fast);
+  outline: none;
+}
+.ds-input:focus,
+.ds-select:focus,
+.ds-textarea:focus {
+  border-color: var(--ds-accent);
+  box-shadow: 0 0 0 3px var(--ds-accent-subtle);
+}
+.ds-input::placeholder,
+.ds-textarea::placeholder {
+  color: var(--ds-text-muted);
+}
+.ds-input:disabled,
+.ds-select:disabled,
+.ds-textarea:disabled {
+  background: var(--ds-bg-muted);
+  color: var(--ds-text-disabled);
+  cursor: not-allowed;
+}
+.ds-select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%2394a3b8' viewBox='0 0 16 16'%3E%3Cpath d='M4.646 5.646a.5.5 0 01.708 0L8 8.293l2.646-2.647a.5.5 0 01.708.708l-3 3a.5.5 0 01-.708 0l-3-3a.5.5 0 010-.708z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right var(--ds-space-3) center;
+  padding-right: var(--ds-space-10);
+}
+.ds-textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+/* =================================================================
+   Table 表格
+   ================================================================= */
+.ds-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--ds-text-sm);
+}
+.ds-table th {
+  text-align: left;
+  font-weight: var(--ds-font-semibold);
+  color: var(--ds-text-secondary);
+  padding: var(--ds-space-2) var(--ds-space-3);
+  border-bottom: 2px solid var(--ds-border);
+  white-space: nowrap;
+  user-select: none;
+}
+.ds-table th[data-sortable] {
+  cursor: pointer;
+}
+.ds-table th[data-sortable]:hover {
+  color: var(--ds-text-primary);
+}
+.ds-table td {
+  padding: var(--ds-space-2) var(--ds-space-3);
+  border-bottom: 1px solid var(--ds-border-subtle);
+  color: var(--ds-text-primary);
+  vertical-align: middle;
+}
+.ds-table tr:hover td {
+  background: var(--ds-bg-muted);
+}
+.ds-table-dense th,
+.ds-table-dense td {
+  padding: var(--ds-space-1) var(--ds-space-2);
+}
+
+/* =================================================================
+   Modal / Dialog 模态框
+   ================================================================= */
+.ds-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: var(--ds-z-modal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--ds-space-4);
+  opacity: 0;
+  transition: opacity var(--ds-transition-base);
+  pointer-events: none;
+}
+.ds-modal-overlay.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+.ds-modal {
+  background: var(--ds-bg-surface);
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius-xl);
+  box-shadow: var(--ds-shadow-xl);
+  width: 100%;
+  max-width: 520px;
+  max-height: calc(100vh - var(--ds-space-8));
+  overflow-y: auto;
+  transform: scale(0.95);
+  transition: transform var(--ds-transition-base);
+}
+.ds-modal-overlay.open .ds-modal {
+  transform: scale(1);
+}
+.ds-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--ds-space-4) var(--ds-space-5);
+  border-bottom: 1px solid var(--ds-border-subtle);
+}
+.ds-modal-header h3 {
+  font-size: var(--ds-text-md);
+  font-weight: var(--ds-font-semibold);
+  color: var(--ds-text-primary);
+  margin: 0;
+}
+.ds-modal-body {
+  padding: var(--ds-space-5);
+}
+.ds-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--ds-space-2);
+  padding: var(--ds-space-4) var(--ds-space-5);
+  border-top: 1px solid var(--ds-border-subtle);
+}
+
+/* =================================================================
+   Drawer 抽屉
+   ================================================================= */
+.ds-drawer-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: var(--ds-z-overlay);
+  opacity: 0;
+  transition: opacity var(--ds-transition-base);
+  pointer-events: none;
+}
+.ds-drawer-overlay.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+.ds-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(520px, calc(100vw - var(--ds-space-8)));
+  background: var(--ds-bg-surface);
+  border-left: 1px solid var(--ds-border);
+  box-shadow: var(--ds-shadow-xl);
+  z-index: var(--ds-z-overlay);
+  transform: translateX(100%);
+  transition: transform 240ms cubic-bezier(0.32, 0.72, 0, 1);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+.ds-drawer.open {
+  transform: translateX(0);
+}
+.ds-drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--ds-space-4) var(--ds-space-5);
+  border-bottom: 1px solid var(--ds-border-subtle);
+  flex-shrink: 0;
+}
+.ds-drawer-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--ds-space-5);
+}
+
+/* =================================================================
+   Tabs 标签页
+   ================================================================= */
+.ds-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--ds-border);
+}
+.ds-tab {
+  padding: var(--ds-space-2) var(--ds-space-4);
+  font-size: var(--ds-text-sm);
+  font-weight: var(--ds-font-medium);
+  color: var(--ds-text-muted);
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: color var(--ds-transition-fast),
+              border-color var(--ds-transition-fast);
+  white-space: nowrap;
+  background: none;
+  border-top: none;
+  border-left: none;
+  border-right: none;
+}
+.ds-tab:hover {
+  color: var(--ds-text-primary);
+}
+.ds-tab.active {
+  color: var(--ds-accent-text);
+  border-bottom-color: var(--ds-accent);
+}
+
+/* =================================================================
+   Toast 提示
+   ================================================================= */
+.ds-toast {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  padding: var(--ds-space-3) var(--ds-space-4);
+  border-radius: var(--ds-radius-lg);
+  box-shadow: var(--ds-shadow-lg);
+  font-size: var(--ds-text-sm);
+  color: #ffffff;
+  animation: ds-toast-in 200ms ease-out;
+  max-width: 380px;
+}
+@keyframes ds-toast-in {
+  from { opacity: 0; transform: translateX(20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+.ds-toast-success { background: var(--ds-success); }
+.ds-toast-error { background: var(--ds-danger); }
+.ds-toast-warning { background: var(--ds-warning); }
+.ds-toast-info { background: var(--ds-info); }
+
+/* =================================================================
+   Tooltip 工具提示
+   ================================================================= */
+.ds-tooltip {
+  position: relative;
+}
+.ds-tooltip::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: var(--ds-space-1) var(--ds-space-2);
+  font-size: var(--ds-text-xs);
+  color: var(--ds-text-inverse);
+  background: var(--ds-text-primary);
+  border-radius: var(--ds-radius-sm);
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--ds-transition-fast);
+  z-index: var(--ds-z-dropdown);
+}
+.ds-tooltip:hover::after {
+  opacity: 1;
+}
+
+/* =================================================================
+   Dropdown Menu 下拉菜单
+   ================================================================= */
+.ds-dropdown {
+  position: relative;
+  display: inline-block;
+}
+.ds-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  min-width: 180px;
+  background: var(--ds-bg-surface);
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius-lg);
+  box-shadow: var(--ds-shadow-lg);
+  padding: var(--ds-space-1);
+  z-index: var(--ds-z-dropdown);
+  opacity: 0;
+  transform: scale(0.95) translateY(-4px);
+  transition: opacity var(--ds-transition-fast),
+              transform var(--ds-transition-fast);
+  pointer-events: none;
+}
+.ds-dropdown-menu.open {
+  opacity: 1;
+  transform: scale(1) translateY(0);
+  pointer-events: auto;
+}
+.ds-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  padding: var(--ds-space-2) var(--ds-space-3);
+  font-size: var(--ds-text-sm);
+  color: var(--ds-text-primary);
+  border-radius: var(--ds-radius-sm);
+  cursor: pointer;
+  transition: background var(--ds-transition-fast);
+  border: none;
+  background: none;
+  width: 100%;
+  text-align: left;
+}
+.ds-dropdown-item:hover {
+  background: var(--ds-bg-muted);
+}
+.ds-dropdown-divider {
+  height: 1px;
+  background: var(--ds-border-subtle);
+  margin: var(--ds-space-1) 0;
+}
+
+/* =================================================================
+   Breadcrumb 面包屑
+   ================================================================= */
+.ds-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-1);
+  font-size: var(--ds-text-sm);
+  color: var(--ds-text-muted);
+}
+.ds-breadcrumb a {
+  color: var(--ds-text-muted);
+  text-decoration: none;
+  transition: color var(--ds-transition-fast);
+}
+.ds-breadcrumb a:hover {
+  color: var(--ds-text-primary);
+  text-decoration: none;
+}
+.ds-breadcrumb-sep::before {
+  content: "/";
+  margin: 0 var(--ds-space-1);
+  color: var(--ds-text-disabled);
+}
+.ds-breadcrumb-current {
+  color: var(--ds-text-primary);
+  font-weight: var(--ds-font-medium);
+}
+
+/* =================================================================
+   Empty State 空状态
+   ================================================================= */
+.ds-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--ds-space-12) var(--ds-space-4);
+  text-align: center;
+  color: var(--ds-text-muted);
+}
+.ds-empty-state svg {
+  width: 48px;
+  height: 48px;
+  margin-bottom: var(--ds-space-4);
+  opacity: 0.4;
+}
+.ds-empty-state-title {
+  font-size: var(--ds-text-md);
+  font-weight: var(--ds-font-medium);
+  color: var(--ds-text-secondary);
+  margin-bottom: var(--ds-space-2);
+}
+.ds-empty-state-desc {
+  font-size: var(--ds-text-sm);
+  max-width: 320px;
+}
+
+/* =================================================================
+   Progress 进度条
+   ================================================================= */
+.ds-progress {
+  height: 6px;
+  background: var(--ds-bg-muted);
+  border-radius: var(--ds-radius-full);
+  overflow: hidden;
+}
+.ds-progress-bar {
+  height: 100%;
+  background: var(--ds-accent);
+  border-radius: var(--ds-radius-full);
+  transition: width var(--ds-transition-slow);
+}
+
+/* =================================================================
+   Avatar 头像
+   ================================================================= */
+.ds-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--ds-radius-full);
+  background: var(--ds-accent-subtle);
+  color: var(--ds-accent-text);
+  font-size: var(--ds-text-xs);
+  font-weight: var(--ds-font-semibold);
+  flex-shrink: 0;
+}
+.ds-avatar-sm {
+  width: 24px;
+  height: 24px;
+  font-size: 10px;
+}
+.ds-avatar-lg {
+  width: 40px;
+  height: 40px;
+  font-size: var(--ds-text-sm);
+}
+
+/* =================================================================
+   Divider 分割线
+   ================================================================= */
+.ds-divider {
+  height: 1px;
+  background: var(--ds-border);
+  border: none;
+  margin: var(--ds-space-4) 0;
+}
+
+/* =================================================================
+   Responsive utilities
+   ================================================================= */
+@media (max-width: 639px) {
+  .ds-hide-mobile { display: none !important; }
+  .ds-drawer {
+    width: 100%;
+    border-left: none;
+  }
+}
+@media (min-width: 640px) {
+  .ds-hide-desktop { display: none !important; }
+}

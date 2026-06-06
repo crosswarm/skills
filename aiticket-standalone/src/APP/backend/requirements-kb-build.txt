@@ -1,0 +1,5 @@
+# Build-time dependencies for local KB parsing pipeline.
+# Runtime servers (e.g. cf) can skip these if they only consume generated artifacts.
+
+PyMuPDF>=1.24.0,<2.0.0
+faster-whisper>=1.1.0,<2.0.0

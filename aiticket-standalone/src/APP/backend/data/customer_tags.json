@@ -1,0 +1,41 @@
+{
+  "中国国际金融股份有限公司": {
+    "tag": "重点客户",
+    "source": "kpi_seed",
+    "first_seeded_at": "2026-05-10",
+    "last_confirmed_at": "2026-05-10",
+    "evidence": {
+      "period": "2026-04-01~2026-04-30",
+      "ticket_count": 13,
+      "target": 3.37,
+      "gap": 9.63,
+      "score": 0.5
+    }
+  },
+  "国投智能科技有限公司": {
+    "tag": "重点客户",
+    "source": "kpi_seed",
+    "first_seeded_at": "2026-05-10",
+    "last_confirmed_at": "2026-05-10",
+    "evidence": {
+      "period": "2026-03-01~2026-03-31",
+      "ticket_count": 13,
+      "target": 3.37,
+      "gap": 9.63,
+      "score": 0.5
+    }
+  },
+  "泰开集团有限公司": {
+    "tag": "重点客户",
+    "source": "kpi_seed",
+    "first_seeded_at": "2026-05-10",
+    "last_confirmed_at": "2026-05-10",
+    "evidence": {
+      "period": "2026-03-01~2026-03-31",
+      "ticket_count": 17,
+      "target": 3.37,
+      "gap": 13.63,
+      "score": 0.5
+    }
+  }
+}

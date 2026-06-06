@@ -1,0 +1,28 @@
+{
+  "id": "weekly-handover-extract",
+  "name": "周聚合移交/移动行为模式",
+  "description": "扫描 operation_history.jsonl 提取团队移交/跨看板操作习惯，输出 handover_patterns.json",
+  "cron": "0 21 * * 6",
+  "task_type": "script",
+  "command": [
+    "__PYTHON__",
+    "APP/backend/scripts/extract_handover_patterns.py"
+  ],
+  "enabled": true,
+  "timeout_seconds": 600,
+  "last_run": "2026-05-09T02:19:24.573593",
+  "next_run": null,
+  "run_count": 1,
+  "last_status": "success",
+  "recent_runs": [
+    {
+      "ts": "2026-05-09T02:19:24.573593",
+      "status": "success",
+      "duration_s": 0.0,
+      "provider": "none"
+    }
+  ],
+  "created_by_uuid": "aaac6ff8-d4a6-ce54-1d0b-0538426b0028",
+  "schema_version": "1.0",
+  "agent_hint": "handover_suggest"
+}

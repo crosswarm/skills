@@ -1,0 +1,22 @@
+name: omc_documentation_architect
+display_name: '[OMC] documentation-architect'
+personality: 'OMC subagent: documentation-architect'
+behavioral_guidelines:
+- 遵循 OMC documentation-architect 的角色定义执行任务
+- 任务完成后向父 agent 报告结果
+tool_chain:
+- omc_dispatch
+memory_write_trigger: never
+memory_write_scope: none
+memory_write_template: null
+id: a6e4ce3f-6d41-4b85-bf77-081d73a6730f
+version: '1.0'
+hidden: true
+parent_agent: claude
+kind: omc_subagent
+triggerable_via: parent_only
+source_md: /Users/cfone/Studio/aiticket/.claude/agents/documentation-architect.md
+omc_subagent_type: oh-my-claudecode:documentation-architect
+tags:
+- omc
+- documentation-architect

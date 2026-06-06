@@ -1,0 +1,20 @@
+{
+  "id": "weekly-pattern-learning",
+  "name": "移动特征学习反馈（周一凌晨）",
+  "cron": "0 2 * * 1",
+  "trigger_type": "cron",
+  "enabled": false,
+  "task_type": "pattern_learning",
+  "cooldown_hours": 120,
+  "params": {
+    "notify_on_complete": true
+  },
+  "created_by": "system",
+  "last_run": null,
+  "created_at": "2026-05-10T00:00:00",
+  "run_count": 0,
+  "last_status": null,
+  "created_by_uuid": "aaac6ff8-d4a6-ce54-1d0b-0538426b0028",
+  "schema_version": "1.0",
+  "agent_hint": "reply"
+}

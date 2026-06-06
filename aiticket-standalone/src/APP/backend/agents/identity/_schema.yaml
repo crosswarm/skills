@@ -1,0 +1,63 @@
+# ─── L5 Identity 模板 ────────────────────────────────────────────────
+# 复制此文件为 agents/identity/{name}.yaml 并按说明填写。
+# 校验规则见 agents/identity_schema.py (AgentIdentity)
+# ─────────────────────────────────────────────────────────────────────
+#
+# kind（角色种类）：
+#   internal_master  — 常驻主导（UXMaster / PRDMaster / ClaudeAgent）
+#   internal_dever   — 常驻执行（UXDever / PRDDever / worker）
+#   internal_worker  — 内部工作者（默认，兼容旧 YAML）
+#   omc_subagent     — OMC 外部 subagent（必须同时填 parent_agent / omc_subagent_type）
+#   external         — 第三方桥接
+#
+# triggerable_via（trigger 入口限制）：
+#   direct       — 可从 agents.html / API 直接触发（默认）
+#   parent_only  — 只能由父 agent authorize_subagent() 触发（omc_subagent 强制自动修正）
+#   schedule_only — 只能由定时任务触发
+#
+# manages_subagent_kinds（父 agent 专用，声明所管辖的 OMC 职能关键词）：
+#   示例: ["design", "ux"] 表示接管 omc_subagent_type 含这些词的子 agent
+
+# 必填：唯一名称（小写 + 下划线，与 Agent 类的 name 属性一致）
+name: my_agent
+
+# 必填：显示名称（用于 agents 页面、飞书通知）
+display_name: 我的 Agent
+
+# 必填：≥20 字、≤600 字。说明：
+#   - 这个 agent 擅长什么、不做什么
+#   - 决策风格（数据驱动/保守/激进）
+#   - 输出风格（简洁/详细/带来源/带置信度）
+personality: >
+  （在这里写至少20字的性格描述）
+
+# 必填：≥2 条，每条 ≤120 字。必须是具体可执行约束，不要空话。
+# 坏示例: "努力完成任务"
+# 好示例: "建议必须同时考虑：技术匹配度 + 当前工作负载 + 历史解决率"
+behavioral_guidelines:
+  - （具体约束 1，≤120 字）
+  - （具体约束 2，≤120 字）
+
+# 必填：声明使用的工具能力（用于 LLM 工具选择和审计可视化）
+# 常见工具键：kb_vector_search / llm_suggest / operation_history_read /
+#   l2_recall_recent / l3_recall_both / l3_remember / l3_recall_shared / l3_remember_shared
+tool_chain:
+  - some_tool
+
+# 必填：何时写入 L3 语义记忆（见 _local/design/specs/MC-AGENT-MEMORY-V1.0.md §5）
+# 可选值：on_adoption | on_evaluation | on_discovery | on_pattern_found |
+#          on_pattern_confirmed | on_reflect_long_task | on_nudge | always | never
+memory_write_trigger: on_discovery
+
+# 必填：写入作用域
+# shared  → user_id="shared"           所有 agent 共享
+# private → user_id="agent:{name}"     本 agent 私有
+# user    → user_id="user:{uid}"       用户级（reply_agent 专用）
+# none    → 不写入（仅 trigger=never 时使用）
+memory_write_scope: private
+
+# 当 trigger != never 时必填。变量用 {xxx} 占位，由 run_task 内 remember() 填充。
+memory_write_template: "（模板内容，含{占位符}）"
+
+# 可选：N 步无写入后触发反思（借鉴 Hermes nudge_interval）。0 = 关闭（默认）。
+# reflect_interval_steps: 0

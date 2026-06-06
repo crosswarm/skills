@@ -1,0 +1,14 @@
+{
+  "name": "daily-reply-metrics",
+  "description": "每日聚合 reply_metrics.jsonl，输出知识链路健康度报告",
+  "schedule": "0 7 * * *",
+  "command": "python -m scripts.daily_reply_metrics_aggregate",
+  "enabled": false,
+  "timeout_seconds": 60,
+  "tags": [
+    "metrics",
+    "kb",
+    "health"
+  ],
+  "schema_version": "1.0"
+}

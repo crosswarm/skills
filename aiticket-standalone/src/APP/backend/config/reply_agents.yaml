@@ -1,0 +1,386 @@
+# ============================================================================
+# 智能回复 — 智能体编排配置
+# ============================================================================
+#
+# 本文件定义智能回复功能的全部智能体、数据流、触发条件和参数。
+# 修改本文件可调整智能体行为, 无需改动 Python 代码。
+#
+# 文件位置: APP/backend/config/reply_agents.yaml
+# 关联架构: _local/design/smart-reply-architecture.md
+# ============================================================================
+
+# ── 全局配置 ──────────────────────────────────────────────────────────────────
+
+global:
+  project: MYPROJECT
+  style_owner: qiangxiao          # 风格学习目标用户 (经办人 ID)
+  llm_provider: zhipu             # 默认 LLM provider (引用 llm_config.json)
+  llm_fallback: minimax           # LLM 降级 provider
+  max_tokens: 2000                # reasoning 模型需要 ≥2000
+  default_language: zh-CN
+
+# ── 智能体定义 ────────────────────────────────────────────────────────────────
+
+agents:
+
+  # ---------- 在线实时链路 (用户请求 → 秒级响应) ----------
+
+  ai_analysis_worker:
+    name: AI 分析 Worker
+    description: 后台优先级队列, 对每条工单做问题分析和解决建议
+    file: board_service_chroma.py
+    class: AIAnalysisWorker
+    trigger: background_thread      # 后台线程持续运行
+    inputs:
+      - jira_issue                  # JiraIssue 对象
+    outputs:
+      - ai_analysis                 # 问题分析 + 解决建议 + 置信度
+    params:
+      batch_size: 5                 # 每批处理条数
+      max_workers: 2                # 并发线程数
+      max_queue_size: 1000          # 任务队列上限
+      min_interval_sec: 6           # LLM 限流间隔 (10 QPM)
+      reuse_similarity_threshold: 0.85  # 语义复用阈值
+      reuse_confidence_min: 0.80
+    storage:
+      vector_cache: chroma_db/      # Chroma 向量缓存
+      file_cache: data_cache/analysis_cache.json
+    fallback:
+      strategy: rule_based          # LLM 失败时用规则引擎
+      confidence_override: 0.5      # 降级时置信度强制为 0.5
+
+  reply_generator:
+    name: 回复生成引擎
+    description: 核心引擎 — 整合 AI 分析 + KB 证据 + 历史范例 + 风格规则, 生成回复
+    file: board_service_chroma.py
+    class: BoardService
+    method: generate_reply_content
+    trigger: api_request            # /api/board/generate-reply
+    inputs:
+      - issue_key                   # 工单号
+      - force                       # 是否强制重新生成
+    outputs:
+      - reply_content               # 回复文本
+      - suggested_reply_method      # 推荐回复方式 (Jira 字段 ID)
+      - suggested_issue_type        # 推荐问题类型 (Jira 字段 ID)
+      - generation_method           # llm / cached / template
+      - kb_sources                  # 引用的 KB 文档列表
+      - examples_used_count         # 引用的历史范例数
+      - style_rules_applied         # 是否应用了风格规则
+    depends_on:
+      - ai_analysis_worker          # 获取分析结果
+      - reply_trainer               # search_examples() 获取范例
+      - kb_runtime                  # 搜索知识库证据
+      - reply_cache                 # 缓存管理
+    params:
+      similar_issues_top_k: 5       # Chroma 相似工单搜索数
+      similar_issues_min_score: 0.7
+      kb_evidence_top_k: 6          # KB 证据搜索数 (取前 4 条)
+      kb_evidence_use_top: 4
+      reply_examples_top_k: 3       # 历史范例搜索数
+      max_solution_length: 1500     # 回复最大字符数
+      max_kb_evidence_length: 1500  # 单条 KB 证据最大字符数
+    generation_strategy:
+      - condition: has_kb_or_examples
+        method: llm_with_style       # LLM + 风格规则 + few-shot
+      - condition: has_analysis_only
+        method: template             # 模板拼接
+      - condition: fallback
+        method: raw_info             # 工单原始信息
+
+  reply_cache:
+    name: 回复缓存
+    description: 缓存已生成的回复, 避免重复 LLM 调用
+    file: reply_cache_service.py
+    trigger: called_by_generator
+    params:
+      ttl_days: 7                   # 缓存有效期
+      max_entries: 100              # 最大缓存条目
+      key_strategy: "{issue_key}_{analysis_hash[:8]}"
+    storage:
+      cache_file: data_cache/reply_cache.json
+
+  feedback_collector:
+    name: 反馈采集器
+    description: 用户提交回复后, 比对 AI 原始版本 vs 最终版本, 记录差异
+    file: reply_trainer.py
+    class: ReplyTrainer
+    method: record_feedback
+    trigger: post_reply_submit      # 用户提交回复后自动触发
+    inputs:
+      - issue_key
+      - ai_original                 # AI 生成的原始回复
+      - user_final                  # 用户最终提交的回复
+      - adopted                     # bool: 是否完全采纳
+      - reply_method                # 回复方式
+      - issue_type                  # 问题类型
+      - is_style_owner              # 是否目标用户
+    outputs:
+      - chunk_count                 # 保存的 chunk 数
+    storage:
+      sqlite: data/reply_trainer/reply_examples.db
+      chroma: data/reply_trainer/chroma/
+      feedback_log: data/reply_trainer/feedback_log.jsonl
+      stats_file: data/reply_feedback.json
+    classification:
+      adopted:
+        label: adopted
+        doc_type: style_owner / answer_only
+      modified:
+        label: modified
+        doc_type: style_owner / answer_only
+        extra: "[AI原始版本] 附加到 chunk_text 用于 diff 学习"
+      imported:
+        detection: ai_original == ""  # 冷启动导入的数据
+        label: adopted               # 兼容旧逻辑
+        stats_bucket: imported        # 但统计归入 imported 不影响真实采纳率
+    post_actions:
+      - kb_auto_import              # 异步提取知识
+
+  kb_auto_import:
+    name: 知识自动导入
+    description: 从用户回复中异步提取结构化知识, 存入知识库
+    file: kb_auto_import.py
+    class: KBAutoImport
+    method: extract_and_save
+    trigger: async_after_feedback   # 反馈采集后异步调用
+    inputs:
+      - user_final                  # 用户最终回复文本
+      - source_context              # {type: "reply", ref_id: issue_key}
+    outputs:
+      - knowledge_item              # {topic, summary, key_facts}
+    params:
+      min_text_length: 80           # 最短文本才值得提取
+      signal_keywords:              # 启发式判断信号
+        - 步骤
+        - 支持
+        - 解决方案
+        - 配置
+        - 补丁
+      dedupe_strategy: ref_id + text_hash
+    storage:
+      source_kind: user_contributed
+      source_rel_path: "reply/{issue_key}"
+
+  # ---------- 离线训练链路 (夜间定时) ----------
+
+  nightly_trainer:
+    name: 夜间训练器
+    description: 每晚取 100 条工单, AI 重新生成回复并打分, 输出诊断报告
+    file: scripts/reply_optimization_trainer.py
+    trigger: cron
+    schedule: "0 2 * * *"          # 每天 02:00
+    launchagent: com.aiticket.reply-trainer
+    inputs:
+      - jira_tickets                # 从 Jira API 随机取 100 条
+    outputs:
+      - session_report              # conclusion/_local/training/sessions/session_NNN_*/report.md
+      - trainer_state               # conclusion/_local/training/trainer_state.json (教训库)
+    params:
+      questions_per_session: 100
+      resume: true                  # 断点续跑
+      scoring_dimensions:
+        - solvability               # 可解决问题度 (0-10)
+        - step_correctness          # 操作步骤正确性 (0-10)
+        - professionalism           # 专业度 (0-10)
+        - completeness              # 完整性 (0-10)
+      pass_threshold: 7.0           # 通过分数线
+    post_actions:
+      - style_rules_evolution       # session 结束后提炼风格规则
+      - sync_to_qcl                 # 训练产物推送到 QCL
+
+  style_rules_evolution:
+    name: 风格规则提炼
+    description: 分析全量反馈 (重点学习修改样本), 调 LLM 提炼 8 维度风格规则
+    file: reply_trainer.py
+    class: ReplyTrainer
+    method: evolve_style_rules
+    trigger: post_nightly_training / manual
+    inputs:
+      - all_feedback_chunks         # SQLite 全量 (≤500 条)
+    outputs:
+      - reply_style_rules.md        # data/reply_style_rules.md
+    params:
+      max_chunks: 500               # 加载上限
+      modified_sample_limit: 30     # 修改样本上限 (全量展示, 不再限 10)
+      owner_sample_limit: 15        # 风格用户样本上限
+      other_sample_limit: 5         # 其他成员样本上限
+      modified_priority: first      # 修改样本排在 prompt 最前面
+    rule_dimensions:
+      - tone_and_manner             # 语气与口吻
+      - opening_format              # 开头格式
+      - closing_format              # 结尾格式
+      - content_structure           # 内容结构
+      - solution_style              # 解决方案风格
+      - terminology                 # 术语偏好
+      - length_preference           # 长度偏好
+      - modification_patterns       # 修改模式 (AI 应避免什么)
+
+  agent_a_indexer:
+    name: Agent A 增量索引器
+    description: 闲时增量处理历史回复, 提取 pattern 到模式库
+    file: scripts/agent_a_indexer.py
+    trigger: cron
+    schedule: idle                  # 闲时运行
+    launchagent: com.aiticket.agent-a-indexer
+    inputs:
+      - reply_examples.db           # SQLite 范例库 (按 rowid 增量)
+    outputs:
+      - pattern_library.json        # conclusion/_local/training/pattern_library.json
+      - agent_a_index_state.json    # 进度追踪
+    params:
+      batch_size: 60                # 每批处理条数
+      batches_per_run: 5            # 每次运行处理批次
+
+  sync_to_qcl:
+    name: 训练产物同步
+    description: 把风格规则 + 模式库 + 训练器状态推送到 QCL 服务器
+    file: ~/Library/Scripts/aiticket/sync-trainer-artifacts.sh
+    trigger: post_nightly_training
+    launchagent: com.aiticket.trainer-sync
+    artifacts:
+      - data/reply_style_rules.md
+      - conclusion/_local/training/pattern_library.json
+      - conclusion/_local/training/trainer_state.json
+    target:
+      host: qcl                     # SSH host alias
+      remote_dir: /opt/ai-ticket
+
+  # ---------- 冷启动 (一次性) ----------
+
+  historical_import:
+    name: 历史数据导入
+    description: 从 CSV 批量导入历史回复到范例库 (冷启动用)
+    file: scripts/import_jira_replies.py
+    trigger: manual
+    inputs:
+      - src/*.csv                   # Jira 导出的离线 CSV
+    outputs:
+      - reply_examples.db           # 批量写入
+    params:
+      owner_user: qiangxiao         # 风格学习目标用户
+      max_count: 0                  # 0 = 全量
+    notes: |
+      导入的数据 ai_original="" (无 AI 原始版本),
+      在统计中归入 imported 而非 live_adopted,
+      不影响真实采纳率计算。
+
+# ── 数据存储定义 ──────────────────────────────────────────────────────────────
+
+storage:
+
+  reply_examples_db:
+    type: sqlite
+    path: data/reply_trainer/reply_examples.db
+    tables:
+      documents:
+        key: content_id
+        fields: [source_kind, name, summary, source_rel_path, citation_label, l1_module, l2_module, doc_type]
+      chunks:
+        key: chunk_id
+        fields: [content_id, chunk_index, chunk_text, chunk_preview, source_kind, name, summary, source_rel_path, citation_label, l1_module, l2_module, doc_type]
+        indexes: [citation_label, doc_type]
+
+  reply_chroma:
+    type: chroma
+    path: data/reply_trainer/chroma/
+    collection: reply_examples
+    embedding: sentence-transformers  # 本地向量化
+
+  analysis_chroma:
+    type: chroma
+    path: chroma_db/
+    collection: analyses
+
+  feedback_stats:
+    type: json
+    path: data/reply_feedback.json
+    schema:
+      total: int                    # 总计 (含导入)
+      adopted: int                  # 总采纳
+      modified: int                 # 总修改
+      imported: int                 # 冷启动导入
+      live_total: int               # 真实 AI 反馈
+      live_adopted: int             # 真实直接采纳
+      live_modified: int            # 真实修改后采纳
+      live_adoption_rate: string    # 真实采纳率
+      last_updated: datetime
+
+  feedback_log:
+    type: jsonl
+    path: data/reply_trainer/feedback_log.jsonl
+    schema_per_line:
+      ts: datetime
+      issue_key: string
+      ticket_summary: string
+      ai_original: string
+      user_final: string
+      adopted: bool
+      reply_method: string
+      issue_type: string
+      is_style_owner: bool
+
+# ── 数据流定义 ────────────────────────────────────────────────────────────────
+
+dataflows:
+
+  online_reply_generation:
+    description: 在线回复生成链路 (秒级)
+    steps:
+      - agent: ai_analysis_worker
+        async: true
+        note: 已在后台预分析, 此处取结果
+      - agent: reply_cache
+        check: hit_or_miss
+        on_hit: return_cached
+      - parallel:
+          - agent: reply_generator
+            action: search_similar_issues
+          - agent: reply_generator
+            action: search_kb_evidence
+          - agent: reply_trainer
+            action: search_examples
+      - agent: reply_generator
+        action: generate_with_llm_or_template
+        uses: [similar_issues, kb_evidence, examples, style_rules]
+      - agent: reply_cache
+        action: save
+
+  feedback_loop:
+    description: 反馈闭环 (用户提交后)
+    steps:
+      - agent: feedback_collector
+        action: compare_and_record
+      - agent: kb_auto_import
+        async: true
+        condition: adopted or content_changed
+
+  nightly_training_pipeline:
+    description: 夜间训练流水线
+    steps:
+      - agent: nightly_trainer
+        action: evaluate_100_tickets
+      - agent: style_rules_evolution
+        action: evolve_from_all_feedback
+      - agent: sync_to_qcl
+        action: push_artifacts
+
+# ── 监控与告警 ────────────────────────────────────────────────────────────────
+
+monitoring:
+  metrics:
+    - name: live_adoption_rate
+      source: feedback_stats.live_adoption_rate
+      alert_below: 10%              # 如果真实采纳率 < 10% 说明 AI 质量需改进
+    - name: nightly_pass_rate
+      source: session_report.pass_rate
+      alert_below: 40%
+    - name: modified_count
+      source: feedback_stats.live_modified
+      note: 越高说明用户越活跃地修正 AI, 是宝贵的学习信号
+    - name: api_error_rate
+      source: nightly_trainer.error_count / questions_per_session
+      alert_above: 10%
+  log_files:
+    trainer_out: ~/Studio/aiticket/APP/backend/logs/reply-trainer.out.log
+    trainer_err: ~/Studio/aiticket/APP/backend/logs/reply-trainer.err.log

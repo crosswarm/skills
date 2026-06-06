@@ -1,0 +1,91 @@
+{
+  "version": "v2",
+  "project_name_map": {
+    "LCZX": "流程支持",
+    "KKZC": "客开支持",
+    "UPESN": "协同云",
+    "YYZJ": "应用支撑-应用构建",
+    "OMST": "运维支持"
+  },
+  "rules": [
+    {
+      "id": "yonsuite_exclude",
+      "name": "公有云/yonsuite 禁止客开移交",
+      "priority": 0,
+      "match": {
+        "product_version_contains": ["yonsuite", "公有云", "cloud", "saas"],
+        "issue_type": ["客开"]
+      },
+      "action": "block_handover",
+      "verdict": "pass",
+      "note": "公有云产品不支持客开，直接放行用正常回复告知",
+      "auto_move_eligible": false,
+      "min_confidence": 0.0
+    },
+    {
+      "id": "kf_handover",
+      "name": "客开工单移交至客开支持",
+      "priority": 1,
+      "match": {
+        "issue_type": ["客开"],
+        "summary_keywords": ["客开", "定制开发", "二次开发", "客户化", "自定义对象", "Customer Object", "扩展点", "扩展开发"],
+        "description_keywords": ["客开", "定制", "customization", "二次开发"],
+        "exclude_product_version": ["yonsuite", "公有云", "cloud", "saas"],
+        "ticket_project": ["LCZX"]
+      },
+      "target_project": "KKZC",
+      "target_project_name": "客开支持",
+      "domain_module": "客户化开发",
+      "transferee": "sunaoodi",
+      "transferee_display": "孙奥迪",
+      "min_confidence": 0.70,
+      "auto_move_eligible": true,
+      "evidence_event_ids": ["LCZX-62865"],
+      "note": "用户口述 2026-05-19: LCZX-62865 移动给KKZC+分配给孙奥迪是标准客开转交方法"
+    },
+    {
+      "id": "message_center",
+      "name": "消息中心问题转移至协同云",
+      "priority": 2,
+      "match": {
+        "summary_keywords": ["消息中心", "短信", "推送", "邮件模板", "消息通知", "站内信", "消息推送", "短信通知", "消息配置"],
+        "description_keywords": ["消息中心", "短信", "推送", "邮件", "通知模板"],
+        "domain_keywords": ["消息中心", "协同-消息中心"],
+        "ticket_project": ["LCZX"]
+      },
+      "target_project": "UPESN",
+      "target_project_name": "协同云",
+      "domain_module": "协同 - 消息中心",
+      "transferee": "wangsm",
+      "transferee_display": "王淑敏",
+      "min_confidence": 0.70,
+      "auto_move_eligible": false,
+      "evidence_event_ids": ["LCZX-62987"],
+      "note": "用户口述 2026-05-19: LCZX-62987 是典型消息中心转移方法，移到UPESN，领域模块协同-消息中心，移交人王淑敏"
+    },
+    {
+      "id": "collab_form",
+      "name": "协同表单问题转移至协同云",
+      "priority": 3,
+      "match": {
+        "summary_keywords": ["表单管理", "表单审批", "OA审批", "协同表单", "表单流程", "审批表单", "表单设计", "流程表单"],
+        "description_keywords": ["表单管理", "表单审批", "OA审批", "协同表单"],
+        "ticket_project": ["LCZX"]
+      },
+      "target_project": "UPESN",
+      "target_project_name": "协同云",
+      "domain_module": "协同 - 表单管理",
+      "transferee": "liangsw",
+      "transferee_display": "梁胜武",
+      "min_confidence": 0.70,
+      "auto_move_eligible": false,
+      "evidence_event_ids": ["LCZX-62897"],
+      "note": "用户口述 2026-05-19: LCZX-62897 协同表单工单(表单管理/表单审批/OA审批)转UPESN+梁胜武"
+    }
+  ],
+  "fallback": {
+    "verdict": "warn",
+    "action": "log_only",
+    "note": "无规则命中时展示提示卡片，不阻塞回复"
+  }
+}

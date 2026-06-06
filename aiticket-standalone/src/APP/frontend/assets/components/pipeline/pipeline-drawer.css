@@ -1,0 +1,57 @@
+/* Pipeline Drawer — field-specific styles */
+
+.pl-drawer {
+  width: 380px;
+}
+
+.pl-drawer-wide {
+  width: 560px !important;
+}
+
+.pl-field-subsection {
+  margin-bottom: 12px;
+}
+
+.pl-field-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.pl-matrix-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.pl-matrix-table th,
+.pl-matrix-table td {
+  border: 1px solid var(--ds-border, #e2e8f0);
+  padding: 5px 8px;
+  text-align: center;
+}
+
+.pl-matrix-table th {
+  background: var(--ds-bg-muted, #f1f5f9);
+  font-weight: 600;
+  color: var(--ds-text-secondary, #475569);
+}
+
+.pl-matrix-cell-forbidden {
+  background: #fef2f2;
+  color: var(--ds-danger, #dc2626);
+  font-weight: 600;
+}
+
+.pl-matrix-input {
+  width: 56px;
+  border: 1px solid var(--ds-border, #e2e8f0);
+  border-radius: var(--ds-radius-sm, 6px);
+  padding: 3px 6px;
+  font-size: 12px;
+  text-align: center;
+}
+.pl-matrix-input:focus {
+  outline: 2px solid var(--ds-accent, #4f46e5);
+  outline-offset: 1px;
+}

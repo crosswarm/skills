@@ -1,0 +1,286 @@
+{
+  "columns": [
+    {
+      "key": "overdue",
+      "title": "⚠️ 已逾期",
+      "type": "system",
+      "rule": "overdue",
+      "color": "red",
+      "bg": "bg-red-50",
+      "visible": false,
+      "manual_issues": []
+    },
+    {
+      "key": "today",
+      "title": "📅 今天到期",
+      "type": "system",
+      "rule": "today",
+      "color": "orange",
+      "bg": "bg-orange-50",
+      "visible": false,
+      "manual_issues": []
+    },
+    {
+      "key": "tomorrow",
+      "title": "⏰ 明天到期",
+      "type": "system",
+      "rule": "tomorrow",
+      "color": "yellow",
+      "bg": "bg-yellow-50",
+      "visible": false,
+      "manual_issues": []
+    },
+    {
+      "key": "custom_1771847704464",
+      "title": "⚠️ 重点关注",
+      "type": "manual",
+      "rule": null,
+      "color": "red",
+      "bg": "bg-red-50",
+      "visible": true,
+      "manual_issues": [
+        "MYPROJECT-61510",
+        "MYPROJECT-61750",
+        "MYPROJECT-61952",
+        "MYPROJECT-61923",
+        "MYPROJECT-61897",
+        "MYPROJECT-61987",
+        "MYPROJECT-62021",
+        "MYPROJECT-62181",
+        "MYPROJECT-62071",
+        "MYPROJECT-62214",
+        "MYPROJECT-62290",
+        "MYPROJECT-62433",
+        "MYPROJECT-62431",
+        "MYPROJECT-62428",
+        "MYPROJECT-62487",
+        "MYPROJECT-62700",
+        "MYPROJECT-62659",
+        "MYPROJECT-62683"
+      ]
+    },
+    {
+      "key": "custom_1771927851038",
+      "title": "待沟通",
+      "type": "manual",
+      "rule": null,
+      "color": "teal",
+      "bg": "bg-teal-50",
+      "visible": false,
+      "manual_issues": [
+        "MYPROJECT-59764",
+        "MYPROJECT-59806",
+        "MYPROJECT-59543",
+        "MYPROJECT-59812",
+        "MYPROJECT-59823",
+        "MYPROJECT-59925",
+        "MYPROJECT-59970",
+        "MYPROJECT-59985",
+        "MYPROJECT-60138",
+        "MYPROJECT-60126",
+        "MYPROJECT-60230",
+        "MYPROJECT-60534",
+        "MYPROJECT-60622",
+        "MYPROJECT-60649",
+        "MYPROJECT-60760",
+        "MYPROJECT-60939",
+        "MYPROJECT-60950",
+        "MYPROJECT-61062",
+        "MYPROJECT-61039",
+        "MYPROJECT-61104",
+        "MYPROJECT-61260",
+        "MYPROJECT-61446"
+      ]
+    },
+    {
+      "key": "this_week",
+      "title": "📆 本周到期",
+      "type": "system",
+      "rule": "this_week",
+      "color": "blue",
+      "bg": "bg-blue-50",
+      "visible": true,
+      "manual_issues": []
+    },
+    {
+      "key": "next_week",
+      "title": "📋 下周到期",
+      "type": "system",
+      "rule": "next_week",
+      "color": "indigo",
+      "bg": "bg-indigo-50",
+      "visible": true,
+      "manual_issues": []
+    },
+    {
+      "key": "future",
+      "title": "📌 更晚",
+      "type": "system",
+      "rule": "future",
+      "color": "green",
+      "bg": "bg-green-50",
+      "visible": true,
+      "manual_issues": []
+    },
+    {
+      "key": "no_date",
+      "title": "📝 无到期日",
+      "type": "system",
+      "rule": "no_date",
+      "color": "gray",
+      "bg": "bg-gray-50",
+      "visible": false,
+      "manual_issues": []
+    }
+  ],
+  "automation_rules": [
+    {
+      "id": "rule_1776653994597",
+      "name": "测试dry-run",
+      "enabled": false,
+      "conditions": {
+        "project": "MYPROJECT",
+        "customer_issue_type": "实施问题",
+        "assignee": ""
+      },
+      "action": {
+        "type": "assign",
+        "assign_to": "chendaqi"
+      },
+      "stats": {
+        "total_processed": 0,
+        "last_run_at": null,
+        "last_run_status": null,
+        "last_run_matched": 0,
+        "last_run_executed": 0,
+        "last_run_errors": 0
+      },
+      "created_at": "2026-04-20T10:59:54.597937"
+    },
+    {
+      "id": "rule_1776655298747",
+      "name": "工作台需求自动转移",
+      "enabled": false,
+      "conditions": {
+        "project": "YYZJ",
+        "customer_issue_type": "需求问题",
+        "keywords": "",
+        "assignee": "qiangxiao",
+        "due_within": ""
+      },
+      "action": {
+        "type": "assign",
+        "assign_to": "wangshuaiw",
+        "target_project": "",
+        "target_module": "",
+        "comment_text": "帅哥辛苦看下吧"
+      },
+      "stats": {
+        "total_processed": 44,
+        "last_run_at": "2026-04-27T13:48:03.414404",
+        "last_run_status": "success",
+        "last_run_matched": 7,
+        "last_run_executed": 7,
+        "last_run_errors": 0
+      },
+      "created_at": "2026-04-20T11:21:38.747757",
+      "processed_keys": [
+        "YYZJ-138563",
+        "YYZJ-138546",
+        "YYZJ-138527",
+        "YYZJ-138373",
+        "YYZJ-138428",
+        "YYZJ-138680",
+        "YYZJ-138545",
+        "YYZJ-138681",
+        "YYZJ-138561",
+        "YYZJ-138363",
+        "YYZJ-138422",
+        "YYZJ-138330",
+        "YYZJ-138494",
+        "YYZJ-138439",
+        "YYZJ-138676",
+        "YYZJ-138488",
+        "YYZJ-138418",
+        "YYZJ-138668",
+        "YYZJ-138409",
+        "YYZJ-138670",
+        "YYZJ-138661",
+        "YYZJ-138449",
+        "YYZJ-138518",
+        "YYZJ-138284",
+        "YYZJ-138331",
+        "YYZJ-138420",
+        "YYZJ-138360",
+        "YYZJ-138361",
+        "YYZJ-138555",
+        "YYZJ-138508",
+        "YYZJ-138557",
+        "YYZJ-138683",
+        "YYZJ-138463",
+        "YYZJ-138410",
+        "YYZJ-138534",
+        "YYZJ-138375",
+        "YYZJ-138566",
+        "YYZJ-138411"
+      ]
+    },
+    {
+      "id": "rule_1776655479455",
+      "name": "测试空结果",
+      "enabled": false,
+      "conditions": {
+        "project": "NONEXIST",
+        "customer_issue_type": "",
+        "assignee": ""
+      },
+      "action": {
+        "type": "assign",
+        "assign_to": "nobody",
+        "target_project": "",
+        "target_module": ""
+      },
+      "stats": {
+        "total_processed": 0,
+        "last_run_at": null,
+        "last_run_status": null,
+        "last_run_matched": 0,
+        "last_run_executed": 0,
+        "last_run_errors": 0
+      },
+      "created_at": "2026-04-20T11:24:39.455468"
+    },
+    {
+      "id": "rule_1776823992907",
+      "name": "自动关闭即将超期",
+      "enabled": true,
+      "conditions": {
+        "project": "",
+        "customer_issue_type": "",
+        "keywords": "",
+        "assignee": "qiangxiao",
+        "due_within": "4h"
+      },
+      "action": {
+        "type": "auto_reply",
+        "assign_to": "",
+        "target_project": "",
+        "target_module": "",
+        "comment_text": "您好！由于此工单转交到本环节时已即将到期，先行关闭，请重新提交工单或直接电话联系qiangxiao沟通，请勿直接重新打开，谢谢"
+      },
+      "stats": {
+        "total_processed": 2,
+        "last_run_at": "2026-04-22T11:19:07.206985",
+        "last_run_status": "success",
+        "last_run_matched": 1,
+        "last_run_executed": 1,
+        "last_run_errors": 0
+      },
+      "created_at": "2026-04-22T10:13:12.907194",
+      "processed_keys": [
+        "YYZJ-137926",
+        "YYZJ-138470"
+      ]
+    }
+  ]
+}

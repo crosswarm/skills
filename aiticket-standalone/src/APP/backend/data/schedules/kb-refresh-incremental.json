@@ -1,0 +1,61 @@
+{
+  "id": "kb-refresh-incremental",
+  "name": "KB 增量 sync（每 30 分钟）",
+  "task_type": "kb_refresh_incremental",
+  "trigger_type": "cron",
+  "cron": "*/30 * * * *",
+  "enabled": true,
+  "catchup_window_hours": 1,
+  "cooldown_hours": 0,
+  "description": "每 30 分钟：增量同步 KB（build + sync），仅处理变更文件，省资源",
+  "last_run": "2026-06-06T03:30:43.858254",
+  "created_at": "2026-05-16T00:00:00",
+  "run_count": 8,
+  "last_status": "success",
+  "created_by": "claude",
+  "created_by_uuid": "aaac6ff8-d4a6-ce54-1d0b-0538426b0028",
+  "schema_version": "1.0",
+  "agent_hint": "kb_fact",
+  "recent_runs": [
+    {
+      "ts": "2026-06-06T00:00:49.455100",
+      "status": "success",
+      "duration_s": 5.6
+    },
+    {
+      "ts": "2026-06-06T00:30:56.747140",
+      "status": "success",
+      "duration_s": 8.3
+    },
+    {
+      "ts": "2026-06-06T01:00:05.486163",
+      "status": "success",
+      "duration_s": 6.5
+    },
+    {
+      "ts": "2026-06-06T01:30:12.409662",
+      "status": "success",
+      "duration_s": 6.0
+    },
+    {
+      "ts": "2026-06-06T02:00:19.137939",
+      "status": "success",
+      "duration_s": 5.8
+    },
+    {
+      "ts": "2026-06-06T02:30:29.908075",
+      "status": "success",
+      "duration_s": 5.0
+    },
+    {
+      "ts": "2026-06-06T03:00:35.952881",
+      "status": "success",
+      "duration_s": 7.3
+    },
+    {
+      "ts": "2026-06-06T03:30:43.858254",
+      "status": "success",
+      "duration_s": 6.6
+    }
+  ]
+}

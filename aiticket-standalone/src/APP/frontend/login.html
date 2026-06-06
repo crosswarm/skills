@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 工单智能分析系统 - 登录</title>
+    <script>const API_BASE = (window.location.pathname === '/demo' || window.location.pathname.startsWith('/demo/')) ? '/demo' : '';</script>
+    <script src="/assets/vendor/tailwind-browser.min.js"></script>
+    <link rel="stylesheet" href="/assets/ds/tokens.css">
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+        }
+        .login-card {
+            background: rgba(255, 255, 255, 0.92);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            box-shadow: 0 20px 60px -12px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.04);
+        }
+        .login-input {
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .login-input:focus {
+            border-color: #6366f1;
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+            outline: none;
+        }
+        .login-btn {
+            background: linear-gradient(135deg, #6366f1, #4f46e5);
+            transition: all 0.2s;
+        }
+        .login-btn:hover {
+            background: linear-gradient(135deg, #4f46e5, #4338ca);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(79, 70, 229, 0.35);
+        }
+        .login-btn:active {
+            transform: translateY(0);
+        }
+        .login-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        .error-toast {
+            animation: shakeIn 0.4s ease;
+        }
+        @keyframes shakeIn {
+            0%, 100% { transform: translateX(0); }
+            20% { transform: translateX(-6px); }
+            40% { transform: translateX(6px); }
+            60% { transform: translateX(-4px); }
+            80% { transform: translateX(4px); }
+        }
+    </style>
+</head>
+<body>
+    <div class="login-card rounded-2xl p-8 w-full max-w-sm mx-4">
+        <!-- Logo -->
+        <div class="text-center mb-8">
+            <div class="inline-flex items-center justify-center w-14 h-14 rounded-xl bg-indigo-600 text-white text-xl font-bold mb-4 shadow-lg">
+                AI
+            </div>
+            <h1 class="text-xl font-semibold text-slate-800">AI 工单智能分析系统</h1>
+            <p class="text-sm text-slate-500 mt-1">请登录以继续</p>
+        </div>
+
+        <!-- Error message -->
+        <div id="login-error" class="hidden error-toast mb-4 px-4 py-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm"></div>
+
+        <!-- Login form -->
+        <form id="login-form" autocomplete="on" onsubmit="handleLogin(event)">
+            <div class="mb-4">
+                <label for="username" class="block text-sm font-medium text-slate-700 mb-1.5">用户名</label>
+                <input
+                    type="text"
+                    id="username"
+                    name="username"
+                    autocomplete="username"
+                    required
+                    placeholder="请输入用户名"
+                    class="login-input w-full px-3.5 py-2.5 border border-slate-200 rounded-lg text-sm bg-white text-slate-800 placeholder-slate-400"
+                >
+            </div>
+            <div class="mb-4">
+                <label for="password" class="block text-sm font-medium text-slate-700 mb-1.5">密码</label>
+                <input
+                    type="password"
+                    id="password"
+                    name="password"
+                    autocomplete="current-password"
+                    required
+                    placeholder="请输入密码"
+                    class="login-input w-full px-3.5 py-2.5 border border-slate-200 rounded-lg text-sm bg-white text-slate-800 placeholder-slate-400"
+                >
+            </div>
+            <div class="mb-6 flex items-center">
+                <input
+                    type="checkbox"
+                    id="remember_me"
+                    name="remember_me"
+                    class="w-4 h-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500 cursor-pointer"
+                >
+                <label for="remember_me" class="ml-2 text-sm text-slate-600 cursor-pointer select-none">记住我（30 天免登录）</label>
+            </div>
+            <button
+                type="submit"
+                id="login-btn"
+                class="login-btn w-full py-2.5 text-white font-medium rounded-lg text-sm"
+            >
+                登录
+            </button>
+        </form>
+
+        <!-- Footer hint -->
+        <p class="text-center text-xs text-slate-400 mt-6">
+            首次使用？请联系管理员创建账号
+        </p>
+    </div>
+
+    <script>
+        async function handleLogin(e) {
+            e.preventDefault();
+            var errorEl = document.getElementById('login-error');
+            var btn = document.getElementById('login-btn');
+            var username = document.getElementById('username').value.trim();
+            var password = document.getElementById('password').value;
+            var rememberMe = document.getElementById('remember_me').checked;
+
+            if (!username || !password) {
+                showError('请输入用户名和密码');
+                return;
+            }
+
+            errorEl.classList.add('hidden');
+            btn.disabled = true;
+            btn.textContent = '登录中...';
+
+            try {
+                var resp = await fetch(API_BASE+'/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        username: username,
+                        password: password,
+                        remember_me: rememberMe,
+                    }),
+                });
+
+                var data = await resp.json();
+
+                if (resp.ok && data.status === 'success') {
+                    var params = new URLSearchParams(location.search);
+                    var next = params.get('next');
+                    var safePaths = /^\/[a-zA-Z0-9\-_/.?=&%#]*$/;
+                    window.location.href = (next && safePaths.test(next)) ? next : API_BASE + '/board.html';
+                } else {
+                    showError(data.detail || '用户名或密码错误');
+                }
+            } catch (err) {
+                showError('网络错误，请检查连接后重试');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '登录';
+            }
+        }
+
+        function showError(msg) {
+            var el = document.getElementById('login-error');
+            el.textContent = msg;
+            el.classList.remove('hidden');
+        }
+
+        // If already logged in, redirect to board
+        (async function checkSession() {
+            try {
+                var resp = await fetch(API_BASE+'/api/auth/me');
+                if (resp.ok) {
+                    window.location.href = API_BASE + '/board.html';
+                }
+            } catch (e) {
+                // Not logged in, stay on login page
+            }
+        })();
+    </script>
+</body>
+</html>

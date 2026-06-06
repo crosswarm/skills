@@ -1,0 +1,22 @@
+name: omc_code_architecture_reviewer
+display_name: '[OMC] code-architecture-reviewer'
+personality: 'OMC subagent: code-architecture-reviewer'
+behavioral_guidelines:
+- 遵循 OMC code-architecture-reviewer 的角色定义执行任务
+- 任务完成后向父 agent 报告结果
+tool_chain:
+- omc_dispatch
+memory_write_trigger: never
+memory_write_scope: none
+memory_write_template: null
+id: 30a93220-ce66-4e4e-ac10-f9ae6b6f88b4
+version: '1.0'
+hidden: true
+parent_agent: claude
+kind: omc_subagent
+triggerable_via: parent_only
+source_md: /Users/cfone/Studio/aiticket/.claude/agents/code-architecture-reviewer.md
+omc_subagent_type: oh-my-claudecode:code-architecture-reviewer
+tags:
+- omc
+- code-architecture-reviewer

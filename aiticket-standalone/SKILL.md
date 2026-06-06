@@ -27,10 +27,12 @@ aiticket-standalone/
 │   ├── make_skill_token.py       为 admin 生成 skill token 写 env.json
 │   ├── requirements-mcp.txt      MCP 依赖（mcp + httpx）
 │   └── test_*.py                 路径/服务单元渲染单测（21 项）
-└── browser-extension/aiticket-jira-session/   ← Chrome/Edge MV3，自动抓 Jira 会话
+├── browser-extension/aiticket-jira-session/   ← Chrome/Edge MV3，自动抓 Jira 会话
+└── src/APP/{backend,frontend}/   ← 随 skill 打包的服务源码（已脱敏，零密钥）
 ```
 
-服务源码（后端 + 静态前端）由 install.py 从 **github.com/crosswarm/aiticket 的 `aiticket-standalone` 分支** 克隆。
+服务源码（后端 + 静态前端）**随本 skill 打包在 `src/`**，install.py 默认直接用它安装（免 clone，复制到 `<HOME>/src`）；
+也可 `--repo/--branch` 改从 git 克隆。源码经 `git archive` 仅导出已跟踪文件并脱敏（无 llm_config / Jira cookie / API key）。
 
 安装布局：`~/.aiticket/{src,venv,data,kb,config}`（`AITICKET_HOME` 可改）。
 > 运行工具用 venv 的 python：`<HOME>/venv/bin/python`（Windows: `<HOME>\venv\Scripts\python.exe`）。
@@ -40,7 +42,7 @@ aiticket-standalone/
 
 | 命令 | 做什么 |
 |------|--------|
-| `/aiticket-install [--full]` | `python tools/install.py`（默认克隆 crosswarm/aiticket@aiticket-standalone；`--full` 加装报表依赖）。装好后服务在 `http://127.0.0.1:18080`，并自动生成 skill token 写入 env.json |
+| `/aiticket-install [--full]` | `python tools/install.py`（默认用随包 `src/` 安装，免 clone；`--full` 加装报表依赖）。装好后服务在 `http://127.0.0.1:18080`，并自动生成 skill token 写入 env.json |
 | `/aiticket-config` | 引导填 Jira 地址 / KB 目录 / 可选 LLM key → 写 `config/deployment.yaml`+`env.json` → restart → 引导装浏览器扩展 |
 | `/aiticket-start` `stop` `restart` `status` `logs` | `python tools/aiticket_ctl.py <cmd>` |
 | `/aiticket-update` | `git -C <HOME>/src pull` → `uv pip install`（热缓存秒级）→ `init_db`（幂等）→ restart |
@@ -50,9 +52,9 @@ aiticket-standalone/
 ## 安装
 
 ```bash
-# 默认克隆 crosswarm/aiticket@aiticket-standalone
+# 默认用随包 src/ 安装（免 clone）
 python tools/install.py --admin-user admin --admin-password '<设个密码>' --jira-url https://jira.example.com
-# 或从本地 checkout 安装（开发）
+# 或从其它 checkout / git 仓安装
 python tools/install.py --src /path/to/aiticket --admin-user admin --admin-password '***'
 ```
 要点：

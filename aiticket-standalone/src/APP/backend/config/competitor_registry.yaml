@@ -1,0 +1,314 @@
+vendors:
+  - id: sap
+    name: SAP SuccessFactors
+    category: 国际 ERP 工作流
+    domains:
+      help: help.sap.com
+      community: community.sap.com
+      product: www.sap.com/products/hcm
+      api: api.sap.com
+    accounts:
+      - tier: public
+        status: active
+      - tier: trial
+        login_url: https://www.sap.com/registration/trial.html
+        username: ${COMPETITOR_SAP_USER}
+        password_env: COMPETITOR_SAP_PASS
+        profile_path: data_cache/competitor_validation/profiles/sap_trial.json
+        status: active
+        last_login: "2026-04-10"
+    feature_modules:
+      - id: workflow_approval
+        name: 审批流程
+        help_url: https://help.sap.com/docs/SAP_SUCCESSFACTORS_PLATFORM/c7d2df9d42f14dc98ac00a895b07a263/workflow-overview.html
+        opencli_adapter: null
+      - id: delegation
+        name: 代理人/委托
+        help_url: https://help.sap.com/docs/SAP_SUCCESSFACTORS_PLATFORM/c7d2df9d42f14dc98ac00a895b07a263/delegation-and-proxy.html
+        opencli_adapter: null
+      - id: form_design
+        name: 表单设计器
+        help_url: https://help.sap.com/docs/SAP_SUCCESSFACTORS_PLATFORM/c7d2df9d42f14dc98ac00a895b07a263/form-templates.html
+        opencli_adapter: null
+      - id: branch_condition
+        name: 分支条件
+        help_url: https://help.sap.com/docs/SAP_SUCCESSFACTORS_PLATFORM/c7d2df9d42f14dc98ac00a895b07a263/route-maps-branch-conditions.html
+        opencli_adapter: null
+      - id: notification
+        name: 消息通知
+        help_url: https://help.sap.com/docs/SAP_SUCCESSFACTORS_PLATFORM/c7d2df9d42f14dc98ac00a895b07a263/workflow-notifications.html
+        opencli_adapter: null
+      - id: print_integration
+        name: 打印集成
+        help_url: https://help.sap.com/docs/SAP_SUCCESSFACTORS_PLATFORM/c7d2df9d42f14dc98ac00a895b07a263/print-forms.html
+        opencli_adapter: null
+      - id: mobile_approval
+        name: 移动审批
+        help_url: https://help.sap.com/docs/SAP_SUCCESSFACTORS_MOBILE/mobile-approval-workflow.html
+        opencli_adapter: null
+      - id: api_integration
+        name: API/接口集成
+        help_url: https://api.sap.com/package/SAPSuccessFactors/rest
+        opencli_adapter: null
+      - id: performance_monitor
+        name: 流程监控/效能
+        help_url: https://help.sap.com/docs/SAP_SUCCESSFACTORS_PLATFORM/c7d2df9d42f14dc98ac00a895b07a263/workflow-monitoring.html
+        opencli_adapter: null
+      - id: signature
+        name: 电子签名
+        help_url: https://help.sap.com/docs/SAP_SUCCESSFACTORS_PLATFORM/c7d2df9d42f14dc98ac00a895b07a263/electronic-signature.html
+        opencli_adapter: null
+
+  - id: kingdee
+    name: 金蝶云星空
+    category: 国产 ERP 工作流
+    domains:
+      help: vip.kingdee.com
+      community: club.kingdee.com
+      product: www.kingdee.com
+      api: open.kingdee.com
+    accounts:
+      - tier: public
+        status: active
+      - tier: demo
+        login_url: https://vip.kingdee.com/login
+        username: ${COMPETITOR_KINGDEE_USER}
+        password_env: COMPETITOR_KINGDEE_PASS
+        profile_path: data_cache/competitor_validation/profiles/kingdee_demo.json
+        status: expired
+        last_login: "2026-03-01"
+    feature_modules:
+      - id: workflow_approval
+        name: 审批流
+        help_url: https://vip.kingdee.com/article/100078901
+        opencli_adapter: null
+      - id: delegation
+        name: 审批委托
+        help_url: https://vip.kingdee.com/article/100078902
+        opencli_adapter: null
+      - id: form_design
+        name: 表单设计器
+        help_url: https://vip.kingdee.com/article/100079001
+        opencli_adapter: null
+      - id: branch_condition
+        name: 分支条件设置
+        help_url: https://vip.kingdee.com/article/100078903
+        opencli_adapter: null
+      - id: notification
+        name: 消息提醒
+        help_url: https://vip.kingdee.com/article/100078904
+        opencli_adapter: null
+      - id: print_integration
+        name: 打印模板
+        help_url: https://vip.kingdee.com/article/100079002
+        opencli_adapter: null
+      - id: mobile_approval
+        name: 移动端审批
+        help_url: https://vip.kingdee.com/article/100078905
+        opencli_adapter: null
+      - id: api_integration
+        name: OpenAPI 接口
+        help_url: https://open.kingdee.com/K3Cloud/docs/workflow-api
+        opencli_adapter: null
+      - id: performance_monitor
+        name: 流程监控
+        help_url: https://vip.kingdee.com/article/100078906
+        opencli_adapter: null
+      - id: signature
+        name: 电子签章
+        help_url: https://vip.kingdee.com/article/100078907
+        opencli_adapter: null
+
+  - id: weaver
+    name: 泛微 e-cology
+    category: 国产 OA 工作流
+    domains:
+      help: ecologyhelp.weaver.com.cn
+      community: bbs.weaver.com.cn
+      product: www.weaver.com.cn
+      api: open.weaver.com.cn
+    accounts:
+      - tier: public
+        status: active
+      - tier: trial
+        login_url: https://www.weaver.com.cn/trial
+        username: ${COMPETITOR_WEAVER_USER}
+        password_env: COMPETITOR_WEAVER_PASS
+        profile_path: data_cache/competitor_validation/profiles/weaver_trial.json
+        status: active
+        last_login: "2026-04-05"
+    feature_modules:
+      - id: workflow_approval
+        name: 流程审批
+        help_url: https://ecologyhelp.weaver.com.cn/weaverhelp/workflow/approval-process.html
+        opencli_adapter: null
+      - id: delegation
+        name: 流程委托
+        help_url: https://ecologyhelp.weaver.com.cn/weaverhelp/workflow/delegation.html
+        opencli_adapter: null
+      - id: form_design
+        name: 表单设计
+        help_url: https://ecologyhelp.weaver.com.cn/weaverhelp/form/form-design.html
+        opencli_adapter: null
+      - id: branch_condition
+        name: 条件分支
+        help_url: https://ecologyhelp.weaver.com.cn/weaverhelp/workflow/branch-condition.html
+        opencli_adapter: null
+      - id: notification
+        name: 消息通知
+        help_url: https://ecologyhelp.weaver.com.cn/weaverhelp/workflow/notification.html
+        opencli_adapter: null
+      - id: print_integration
+        name: 打印集成
+        help_url: https://ecologyhelp.weaver.com.cn/weaverhelp/form/print.html
+        opencli_adapter: null
+      - id: mobile_approval
+        name: 移动端审批
+        help_url: https://ecologyhelp.weaver.com.cn/weaverhelp/mobile/approval.html
+        opencli_adapter: null
+      - id: api_integration
+        name: 开放 API
+        help_url: https://open.weaver.com.cn/docs/workflow-api
+        opencli_adapter: null
+      - id: performance_monitor
+        name: 流程监控
+        help_url: https://ecologyhelp.weaver.com.cn/weaverhelp/workflow/monitor.html
+        opencli_adapter: null
+      - id: signature
+        name: 电子签名
+        help_url: https://ecologyhelp.weaver.com.cn/weaverhelp/workflow/esignature.html
+        opencli_adapter: null
+
+  - id: seeyon
+    name: 致远 A8+
+    category: 国产 OA 工作流
+    domains:
+      help: help.seeyon.com
+      community: bbs.seeyon.com
+      product: www.seeyon.com
+      api: open.seeyon.com
+    accounts:
+      - tier: public
+        status: active
+      - tier: trial
+        login_url: https://www.seeyon.com/trial
+        username: ${COMPETITOR_SEEYON_USER}
+        password_env: COMPETITOR_SEEYON_PASS
+        profile_path: data_cache/competitor_validation/profiles/seeyon_trial.json
+        status: active
+        last_login: "2026-04-08"
+    feature_modules:
+      - id: workflow_approval
+        name: 流程审批
+        help_url: https://help.seeyon.com/a8plus/workflow/approval.html
+        opencli_adapter: null
+      - id: delegation
+        name: 审批代理
+        help_url: https://help.seeyon.com/a8plus/workflow/delegation.html
+        opencli_adapter: null
+      - id: form_design
+        name: 表单设计器
+        help_url: https://help.seeyon.com/a8plus/form/form-design.html
+        opencli_adapter: null
+      - id: branch_condition
+        name: 条件分支
+        help_url: https://help.seeyon.com/a8plus/workflow/branch.html
+        opencli_adapter: null
+      - id: notification
+        name: 消息通知
+        help_url: https://help.seeyon.com/a8plus/workflow/notification.html
+        opencli_adapter: null
+      - id: print_integration
+        name: 打印输出
+        help_url: https://help.seeyon.com/a8plus/form/print.html
+        opencli_adapter: null
+      - id: mobile_approval
+        name: 移动审批
+        help_url: https://help.seeyon.com/a8plus/mobile/approval.html
+        opencli_adapter: null
+      - id: api_integration
+        name: 开放平台 API
+        help_url: https://open.seeyon.com/docs/workflow
+        opencli_adapter: null
+      - id: performance_monitor
+        name: 流程效能监控
+        help_url: https://help.seeyon.com/a8plus/workflow/monitor.html
+        opencli_adapter: null
+      - id: signature
+        name: 电子签章
+        help_url: https://help.seeyon.com/a8plus/workflow/esignature.html
+        opencli_adapter: null
+
+# 功能模块标准分类（跨竞品统一 taxonomy）
+# 探索方法论 — 竞品功能探索时使用 product-exploration-v2 标准流程
+exploration:
+  skill_path: .agent/skills/product-exploration-v2
+  workflow:
+    - preparation       # references/10-preparation.md
+    - feature_tree      # references/20-feature-tree.md
+    - deep_interaction   # references/30-deep-interaction.md
+    - documentation     # references/40-documentation.md
+    - kb_structuring    # references/50-kb-structuring.md
+    - prototype         # references/60-prototype.md (可选,仅需原型时)
+
+feature_taxonomy:
+  - id: workflow_approval
+    name: 审批流程
+    description: 多级串行/并行审批、条件路由、审批意见
+    search_terms:
+      zh: ["审批流程", "流程审批", "审批节点", "流程引擎"]
+      en: ["workflow approval", "approval process", "workflow engine"]
+  - id: delegation
+    name: 代理人/委托
+    description: 审批委托、代理审批、临时授权
+    search_terms:
+      zh: ["审批委托", "代理审批", "委托授权", "代理人设置"]
+      en: ["delegation", "proxy approver", "substitute approver", "approval delegation"]
+  - id: form_design
+    name: 表单设计器
+    description: 可视化表单设计、字段配置、布局管理
+    search_terms:
+      zh: ["表单设计", "表单配置", "字段设置", "表单模板"]
+      en: ["form design", "form builder", "form template", "field configuration"]
+  - id: branch_condition
+    name: 分支条件
+    description: 条件路由、动态分支、规则引擎
+    search_terms:
+      zh: ["条件分支", "流程分支", "分支条件", "路由条件"]
+      en: ["branch condition", "conditional routing", "route map", "decision node"]
+  - id: notification
+    name: 消息通知
+    description: 邮件/短信/APP消息推送、待办提醒
+    search_terms:
+      zh: ["消息通知", "流程通知", "审批提醒", "待办通知"]
+      en: ["notification", "workflow notification", "approval reminder", "message push"]
+  - id: print_integration
+    name: 打印集成
+    description: 表单打印、打印模板、批量打印
+    search_terms:
+      zh: ["打印集成", "打印模板", "表单打印", "打印配置"]
+      en: ["print integration", "print template", "form print", "print configuration"]
+  - id: mobile_approval
+    name: 移动审批
+    description: 手机端审批、APP审批、移动办公
+    search_terms:
+      zh: ["移动审批", "手机审批", "移动端", "APP审批"]
+      en: ["mobile approval", "mobile workflow", "app approval", "mobile office"]
+  - id: api_integration
+    name: API/接口集成
+    description: REST API、OpenAPI、第三方系统集成
+    search_terms:
+      zh: ["API集成", "开放接口", "OpenAPI", "接口对接"]
+      en: ["API integration", "REST API", "open API", "third-party integration"]
+  - id: performance_monitor
+    name: 流程监控/效能
+    description: 流程进度追踪、超时预警、效能分析
+    search_terms:
+      zh: ["流程监控", "流程追踪", "效能分析", "超时预警"]
+      en: ["process monitoring", "workflow tracking", "performance analytics", "SLA monitoring"]
+  - id: signature
+    name: 电子签名
+    description: 电子签章、数字签名、手写签名
+    search_terms:
+      zh: ["电子签名", "电子签章", "数字签名", "手写签名"]
+      en: ["electronic signature", "digital signature", "e-signature", "handwritten signature"]

@@ -1,0 +1,14 @@
+{
+  "name": "gate-precompute-replies",
+  "description": "每30分钟触发智能决策看板回复预计算，确保工单在用户打开前已有缓存回复",
+  "schedule": "*/30 * * * *",
+  "command": "python -c \"import requests; requests.post('http://127.0.0.1:8000/api/board/precompute-replies', json={'project_key': 'MYPROJECT', 'modules': []}, timeout=5)\"",
+  "enabled": true,
+  "timeout_seconds": 1800,
+  "tags": [
+    "gate",
+    "precompute",
+    "cache"
+  ],
+  "schema_version": "1.0"
+}

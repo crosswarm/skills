@@ -1,0 +1,68 @@
+gates:
+  completeness:
+    enabled: true
+    scope_filter:
+      projects: ["流程中心", "消息中心"]
+      customer_problem_types: ["bug", "客开", "需求问题", "实施问题", "数据问题"]
+    agent: kb_fact
+    auto_inquiry_max_per_ticket: 2
+    llm_provider: local
+  classification:
+    enabled: true
+    agent: darwin
+    auto_move_threshold: 0.92
+    suspect_label_threshold: 0.70
+    rollback_pause_rate: 0.05
+    llm_provider: local
+
+  reuse:
+    enabled: true
+    composite_threshold: 0.83
+    min_adopted_count: 3
+    score_weights:
+      similarity: 0.475
+      adoption_signal: 0.375
+      recency: 0.0
+      version_match: 0.15
+
+  specificity:
+    enabled: true
+    thresholds:
+      high: 0.80
+      medium: 0.55
+      low: 0.30
+
+  supervisor:
+    enabled: true
+    pass_threshold: 0.80
+    review_threshold: 0.50
+    divergence_alert_delta: 0.20
+    provider_isolation: true
+
+auto_reply_decision:
+  enabled: true
+  weights:
+    supervisor_confidence: 0.50
+    product_priority: 0.20
+    customer_importance_inverse: 0.30
+  thresholds:
+    yonsuite:
+      normal: 0.65
+      key_customer: 0.80
+    standard:
+      normal: 0.72
+      key_customer: 0.85
+    custom:
+      normal: 0.80
+      key_customer: null
+
+customer_priority:
+  monthly_ticket_threshold: 10
+  cumulative_ticket_threshold: 50
+  high_priority_label_ratio: 0.30
+  refresh_cron: "0 2 * * *"
+
+attachments:
+  v1_supported: ["png", "jpg", "jpeg", "gif", "docx", "pdf", "xlsx"]
+  pdf_max_pages: 50
+  xlsx_max_rows: 1000

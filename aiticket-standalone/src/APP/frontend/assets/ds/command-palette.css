@@ -1,0 +1,134 @@
+/* ===================================================================
+   command-palette.css - 命令面板样式
+   =================================================================== */
+
+.ds-cmd-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: var(--ds-z-command);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 15vh;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--ds-transition-fast);
+}
+[data-theme="dark"] .ds-cmd-overlay {
+  background: rgba(0, 0, 0, 0.7);
+}
+.ds-cmd-overlay.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.ds-cmd-palette {
+  width: 100%;
+  max-width: 520px;
+  background: var(--ds-bg-surface);
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius-xl);
+  box-shadow: var(--ds-shadow-xl);
+  overflow: hidden;
+  transform: scale(0.95) translateY(-8px);
+  transition: transform var(--ds-transition-fast);
+}
+.ds-cmd-overlay.open .ds-cmd-palette {
+  transform: scale(1) translateY(0);
+}
+
+/* --- 搜索输入 --- */
+.ds-cmd-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  padding: var(--ds-space-3) var(--ds-space-4);
+  border-bottom: 1px solid var(--ds-border-subtle);
+}
+.ds-cmd-search-icon {
+  flex-shrink: 0;
+  color: var(--ds-text-muted);
+  width: 16px !important;
+  height: 16px !important;
+}
+.ds-cmd-input {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: var(--ds-text-base);
+  font-family: var(--ds-font);
+  color: var(--ds-text-primary);
+  padding: 0;
+}
+.ds-cmd-input::placeholder {
+  color: var(--ds-text-muted);
+}
+.ds-cmd-kbd {
+  flex-shrink: 0;
+  padding: 2px 6px;
+  font-size: 11px;
+  font-family: var(--ds-font-mono);
+  color: var(--ds-text-muted);
+  background: var(--ds-bg-muted);
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius-xs);
+}
+
+/* --- 结果列表 --- */
+.ds-cmd-list {
+  max-height: 320px;
+  overflow-y: auto;
+  padding: var(--ds-space-2);
+}
+
+.ds-cmd-group {
+  padding: var(--ds-space-2) var(--ds-space-3);
+  font-size: var(--ds-text-xs);
+  font-weight: var(--ds-font-semibold);
+  color: var(--ds-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.ds-cmd-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--ds-space-2) var(--ds-space-3);
+  border-radius: var(--ds-radius-md);
+  cursor: pointer;
+  transition: background var(--ds-transition-fast);
+}
+.ds-cmd-item:hover,
+.ds-cmd-item.active {
+  background: var(--ds-bg-muted);
+}
+.ds-cmd-item-label {
+  font-size: var(--ds-text-sm);
+  color: var(--ds-text-primary);
+}
+.ds-cmd-item-hint {
+  font-size: var(--ds-text-xs);
+  color: var(--ds-text-muted);
+}
+
+.ds-cmd-empty {
+  padding: var(--ds-space-8) var(--ds-space-4);
+  text-align: center;
+  font-size: var(--ds-text-sm);
+  color: var(--ds-text-muted);
+}
+
+/* --- 移动端适配 --- */
+@media (max-width: 639px) {
+  .ds-cmd-overlay {
+    padding-top: var(--ds-space-4);
+    padding-left: var(--ds-space-3);
+    padding-right: var(--ds-space-3);
+  }
+  .ds-cmd-palette {
+    max-width: 100%;
+  }
+}

@@ -1,0 +1,67 @@
+{
+  "columns": [
+    {
+      "key": "overdue",
+      "title": "待沟通",
+      "type": "date",
+      "rule": "overdue",
+      "color": "red",
+      "bg": "bg-red-50",
+      "visible": true
+    },
+    {
+      "key": "today",
+      "title": "待检查",
+      "type": "date",
+      "rule": "today",
+      "color": "orange",
+      "bg": "bg-orange-50",
+      "visible": true
+    },
+    {
+      "key": "tomorrow",
+      "title": "⏰ 明天到期",
+      "type": "date",
+      "rule": "tomorrow",
+      "color": "yellow",
+      "bg": "bg-yellow-50",
+      "visible": false
+    },
+    {
+      "key": "this_week",
+      "title": "📆 本周到期",
+      "type": "system",
+      "rule": "this_week",
+      "color": "blue",
+      "bg": "bg-blue-50",
+      "visible": true
+    },
+    {
+      "key": "next_week",
+      "title": "📋 下周到期",
+      "type": "system",
+      "rule": "next_week",
+      "color": "indigo",
+      "bg": "bg-indigo-50",
+      "visible": true
+    },
+    {
+      "key": "future",
+      "title": "📌 更晚",
+      "type": "date",
+      "rule": "future",
+      "color": "green",
+      "bg": "bg-green-50",
+      "visible": false
+    },
+    {
+      "key": "no_date",
+      "title": "📝 无到期日",
+      "type": "system",
+      "rule": "no_date",
+      "color": "gray",
+      "bg": "bg-gray-50",
+      "visible": true
+    }
+  ]
+}

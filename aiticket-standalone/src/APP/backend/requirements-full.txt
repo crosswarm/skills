@@ -1,0 +1,35 @@
+# aiticket compact (lite) — 完整档（核心 + 可选重依赖）
+# 在 core 之上加：报表分析(pandas/numpy/scipy/sklearn) + Gemini 直连(google 全家桶) + Excel/xlsx KB 解析。
+# 安装：uv pip install -r requirements-full.txt
+
+-r requirements-core.txt
+
+# --- 报表 / 分析 / KPI（monthly/weekly/kpi_calculator）---
+numpy==2.0.2
+pandas==2.3.3
+scipy==1.13.1
+scikit-learn==1.6.1
+joblib==1.5.3
+threadpoolctl==3.6.0
+
+# --- Excel / xlsx KB 文档解析 ---
+openpyxl>=3.1.0
+
+# --- Google Gemini 直连（可选 LLM/embedding provider）---
+google-genai==1.62.0
+google-generativeai==0.8.6
+google-ai-generativelanguage==0.6.15
+google-api-core==2.29.0
+google-api-python-client==2.188.0
+google-auth==2.47.0
+google-auth-httplib2==0.3.0
+googleapis-common-protos==1.72.0
+grpcio==1.76.0
+grpcio-status==1.71.2
+proto-plus==1.27.0
+protobuf==5.29.5
+httplib2==0.31.2
+uritemplate==4.2.0
+pyasn1==0.6.2
+pyasn1_modules==0.4.2
+rsa==4.9.1

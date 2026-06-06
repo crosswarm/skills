@@ -1,0 +1,24 @@
+{
+  "id": "weekly-kb-full-reindex",
+  "name": "每周 product_facts 全量重索引",
+  "task_type": "script",
+  "trigger_type": "cron",
+  "cron": "0 1 * * 0",
+  "enabled": true,
+  "catchup_window_hours": 0,
+  "cooldown_hours": 120,
+  "command": [
+    "__PYTHON__",
+    "product_facts_indexer.py",
+    "--force"
+  ],
+  "description": "每周日01:00：全量强制重建 product_facts chroma 索引，兜底防止索引漂移",
+  "last_run": null,
+  "created_at": "2026-05-12T09:00:00",
+  "run_count": 0,
+  "last_status": "unknown",
+  "created_by": "claude",
+  "created_by_uuid": "aaac6ff8-d4a6-ce54-1d0b-0538426b0028",
+  "schema_version": "1.0",
+  "agent_hint": "kb_fact"
+}
