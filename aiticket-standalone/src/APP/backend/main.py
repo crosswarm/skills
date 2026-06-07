@@ -642,6 +642,30 @@ def _register_session_keepalives():
 # 应用启动时注册
 _register_session_keepalives()
 
+# 本地单用户免登录：缓存唯一本地用户（仅 AITICKET_LOCAL_MODE + localhost 生效）
+_LOCAL_USER_CACHE: Optional[Dict[str, Any]] = None
+
+
+def _get_local_user() -> Optional[Dict[str, Any]]:
+    global _LOCAL_USER_CACHE
+    if _LOCAL_USER_CACHE is not None:
+        return _LOCAL_USER_CACHE
+    try:
+        users = auth_service.list_users()
+        admins = [u for u in users if u.get("role") == "admin"]
+        picked = (admins or users or [None])[0]
+        if picked:
+            _LOCAL_USER_CACHE = picked  # 仅命中才缓存（首启 seed 后即可用）
+        return picked
+    except Exception:
+        return None
+
+
+def _is_localhost(request: Request) -> bool:
+    host = (request.client.host if request.client else "") or ""
+    return host in ("127.0.0.1", "::1", "localhost")
+
+
 # 请求日志中间件
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
@@ -663,6 +687,13 @@ async def log_requests(request: Request, call_next):
                 auth_service.get_user_by_skill_token(_skill_tok) if _skill_tok else None)
     except Exception:
         request.state.current_user = None
+
+    # 本地单用户免登录：AITICKET_LOCAL_MODE 开 + 来自 localhost + 未鉴权 → 自动以唯一本地用户身份通过
+    # （服务仅绑 127.0.0.1，localhost=可信；绝不对非 localhost 放行）
+    if (request.state.current_user is None
+            and os.environ.get("AITICKET_LOCAL_MODE", "").strip().lower() in ("1", "true", "yes")
+            and _is_localhost(request)):
+        request.state.current_user = _get_local_user()
 
     # Demo guard: 演示账号禁止所有写操作（reset-demo 和 logout 除外）
     _cu = request.state.current_user
@@ -1313,7 +1344,23 @@ def save_jira_session_binding(payload: JiraSessionBindingRequest, request: Reque
             "xsrf_token": mask_jira_token((payload.xsrf_token or "").strip()),
         },
     )
+    _auto_import_history_after_bind(user)
     return {"status": "success", "binding": binding}
+
+
+def _auto_import_history_after_bind(user: Dict[str, Any]) -> None:
+    """绑定 Jira 会话成功后：若用户有默认项目且未索引，用刚绑定的会话后台导入最近 12 个月历史工单。"""
+    try:
+        pk = (user.get("current_project") or "").strip()
+        if not pk or pk == "_global":
+            return
+        from services.project_index_service import get_project_index_service
+        svc = get_project_index_service()
+        if svc.has_data(pk):
+            return
+        svc.trigger_import(pk, user["id"], months=12)
+    except Exception as e:
+        logger.warning(f"[auto-import] 绑定后自动导入触发失败（不影响绑定）：{e}")
 
 
 _jira_status_cache: dict = {}
@@ -1388,6 +1435,7 @@ def jira_session_bind(payload: JiraSessionBindingRequest, request: Request):
     result = {"status": "success", "verified": verified, "jira_name": jira_name, "xsrf_present": bool(xsrf)}
     if verify_reason:
         result["reason"] = verify_reason
+    _auto_import_history_after_bind(user)
     return result
 
 
@@ -2159,6 +2207,59 @@ def kb_refresh(body: dict = Body({})):
     t = threading.Thread(target=_run_kb_refresh, args=(task_id, force), daemon=True)
     t.start()
     return {"task_id": task_id, "status": "pending"}
+
+
+class KBRootRequest(BaseModel):
+    path: str
+
+
+@app.post("/api/config/kb-root", status_code=202)
+def set_kb_root(body: KBRootRequest, request: Request, _user=Depends(require_authenticated_user)):
+    """设置本地 KB 知识库目录并立即异步解析。
+    校验目录 → 写 deployment.yaml kb.root_dir → 切换 kb_runtime_service.kb_root →
+    触发 build+sync+compile，返回 task_id 供轮询进度（GET /api/kb/refresh/status/{task_id}）。"""
+    import threading
+    from pathlib import Path as _P
+    raw = (body.path or "").strip()
+    if not raw:
+        raise HTTPException(status_code=400, detail="path 不能为空")
+    kb_path = _P(raw).expanduser()
+    if not kb_path.is_dir():
+        raise HTTPException(status_code=400, detail=f"目录不存在或不是文件夹：{kb_path}")
+    kb_root = str(kb_path.resolve())
+
+    # 1) 写 deployment.yaml 的 kb.root_dir（venv 有 PyYAML，安全读写）
+    try:
+        import yaml as _yaml
+        from config.loader import _find_config_file, get_instance_config
+        cfg_path = _find_config_file()
+        data = {}
+        if cfg_path and cfg_path.is_file():
+            with open(cfg_path, "r", encoding="utf-8") as f:
+                data = _yaml.safe_load(f) or {}
+        else:
+            cfg_path = _P(os.environ.get("CONFIG_FILE", "")
+                          or os.path.join(os.path.dirname(__file__), "config", "deployment.yaml"))
+            cfg_path.parent.mkdir(parents=True, exist_ok=True)
+        data.setdefault("kb", {})["root_dir"] = kb_root
+        with open(cfg_path, "w", encoding="utf-8") as f:
+            _yaml.safe_dump(data, f, allow_unicode=True, sort_keys=False)
+        get_instance_config.cache_clear()  # 让后续 cfg() 读到新值
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"写配置失败：{e}")
+
+    # 2) 切换运行时 KB 根目录
+    global kb_runtime_service
+    try:
+        kb_runtime_service = KnowledgeRuntimeService(kb_root=_P(kb_root))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"切换 KB 目录失败：{e}")
+
+    # 3) 立即异步解析（build+sync+compile），返回 task_id
+    task_id = f"kbr-{_uuid.uuid4().hex[:12]}"
+    _kb_refresh_tasks[task_id] = {"task_id": task_id, "status": "pending", "step": "", "kb_root": kb_root}
+    threading.Thread(target=_run_kb_refresh, args=(task_id, True), daemon=True).start()
+    return {"ok": True, "kb_root": kb_root, "task_id": task_id, "status": "pending"}
 
 
 @app.get("/api/kb/refresh/status/{task_id}")
@@ -6030,9 +6131,31 @@ class GuideGenerateRequest(BaseModel):
 
 @app.get("/api/index/status")
 async def get_index_status(project_key: str):
-    """查询某项目的 Chroma 历史工单索引进度（供前端轮询）"""
+    """查询某项目的历史工单索引/导入进度（供前端/skill 轮询）"""
     from services.project_index_service import get_project_index_service
     return get_project_index_service().get_status(project_key)
+
+
+class ImportHistoryRequest(BaseModel):
+    project_key: str = ""
+    months: int = 12
+
+
+@app.post("/api/index/import-history", status_code=202)
+def import_history(body: ImportHistoryRequest, request: Request,
+                   _user=Depends(require_authenticated_user)):
+    """手动触发：用当前用户绑定的 Jira 会话，后台导入指定项目最近 months 个月历史工单并建索引。
+    project_key 留空则用用户默认项目（current_project）。进度查 GET /api/index/status?project_key=。"""
+    user = get_current_user(request)
+    pk = (body.project_key or "").strip() or ((user.get("current_project") or "").strip() if user else "")
+    if not pk or pk == "_global":
+        raise HTTPException(status_code=400, detail="未指定项目，且当前用户无默认项目（请先在 /aiticket-config 设默认项目）")
+    from services.project_index_service import get_project_index_service
+    ok = get_project_index_service().trigger_import(pk, user["id"], months=body.months or 12)
+    if not ok:
+        raise HTTPException(status_code=409,
+                            detail="导入未启动：请先绑定 Jira 会话（浏览器扩展或手动贴 JSESSIONID），或该项目已在导入中")
+    return {"ok": True, "project_key": pk, "months": body.months or 12, "status": "pending"}
 
 
 @app.get("/guide.html")

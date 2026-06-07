@@ -24,7 +24,7 @@ _DEFAULT_CONFIG: dict[str, Any] = {
         "allowed_project_keys": [],
     },
     "jira": {
-        "base_url": "",
+        "base_url": "https://gfjira.yyrd.com",
         "cookie_domains": [],
         "ssl_verify": True,
         "ca_bundle": "",

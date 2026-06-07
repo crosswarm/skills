@@ -91,6 +91,51 @@ class ProjectIndexService:
         logger.info(f"[ProjectIndex] Enqueued lazy index job for {project_key} ({lookback_days}d)")
         return True
 
+    def trigger_import(self, project_key: str, user_id: str, months: int = 12) -> bool:
+        """会话感知历史导入：用该用户绑定的 Jira 会话拉取最近 months 个月工单并索引。
+        与 trigger_if_empty 不同：① 用 user 绑定会话（compact 全局 jira_service 无有效会话）；
+        ② 允许显式重跑（不因 has_data 跳过）；③ 窗口按 months（默认 12 个月）。
+        Returns True if a job started, False if skipped/no-session."""
+        if os.environ.get("AITICKET_ROLE", "").lower() == "qcl":
+            return False
+        if not project_key or project_key == "_global" or not user_id:
+            return False
+        # 已在跑则不重复
+        try:
+            with _connect(self.db_path) as conn:
+                row = conn.execute(
+                    "SELECT status FROM project_index_jobs WHERE project_key = ?",
+                    (project_key,),
+                ).fetchone()
+                if row and row["status"] in ("pending", "running"):
+                    return False
+                conn.execute(
+                    """INSERT OR REPLACE INTO project_index_jobs
+                       (project_key, status, total, done, started_at, finished_at, error)
+                       VALUES (?, 'pending', 0, 0, ?, NULL, '')""",
+                    (project_key, int(time.time())),
+                )
+        except Exception as e:
+            logger.warning(f"[ProjectIndex] import DB write failed for {project_key}: {e}")
+            return False
+
+        jira_client = _build_user_jira_client(user_id)
+        if jira_client is None:
+            self._set_status(project_key, "failed", error="no_jira_session（请先绑定 Jira 会话）")
+            logger.warning(f"[ProjectIndex] {project_key}: 无绑定 Jira 会话，导入未启动")
+            return False
+
+        days = max(1, int(round(months * 30.5)))
+        t = threading.Thread(
+            target=self._run_job_with_client,
+            args=(project_key, days, jira_client),
+            daemon=True,
+            name=f"import-{project_key}",
+        )
+        t.start()
+        logger.info(f"[ProjectIndex] 启动会话感知历史导入 {project_key}（{months} 个月 / {days}d）")
+        return True
+
     def get_status(self, project_key: str) -> dict:
         """Return {status, total, done, percent, error} for the given project."""
         try:
@@ -148,6 +193,29 @@ class ProjectIndexService:
             logger.error(f"[ProjectIndex] Job failed for {project_key}: {e}", exc_info=True)
             self._set_status(project_key, "failed", error=str(e))
 
+    def _run_job_with_client(self, project_key: str, days: int, jira_client) -> None:
+        """会话感知导入后台 job：用传入的 JiraService（绑定会话）拉取 + 增量进度。"""
+        try:
+            self._set_status(project_key, "running", started_at=int(time.time()))
+            sys_path_patch()
+            from scripts.incremental_issues_index import run_for_project
+
+            jql = f'project = "{project_key}" AND updated >= -{days}d'
+            result = jira_client.search_issues_rest_api(jql, start_at=0, max_results=1)
+            total = result.get("total", 0) if isinstance(result, dict) else 0
+            self._set_total(project_key, total)
+
+            def _cb(scanned: int, tot: int) -> None:
+                self._update_done(project_key, scanned)  # 进度=已扫描/总数
+
+            run_for_project(project_key, days=days, jira_client=jira_client, progress_cb=_cb)
+            self._update_done(project_key, total)
+            self._set_status(project_key, "done", finished_at=int(time.time()))
+            logger.info(f"[ProjectIndex] 历史导入完成 {project_key}（{total} 条）")
+        except Exception as e:
+            logger.error(f"[ProjectIndex] 历史导入失败 {project_key}: {e}", exc_info=True)
+            self._set_status(project_key, "failed", error=str(e))
+
     # ──────────────────────────── DB helpers ────────────────────────────
 
     def _set_status(self, project_key: str, status: str,
@@ -202,6 +270,37 @@ def sys_path_patch() -> None:
     backend = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
     if backend not in sys.path:
         sys.path.insert(0, backend)
+
+
+def _build_user_jira_client(user_id: str):
+    """用用户绑定的 session_cookie 建一个 JiraService（后台 job 无请求上下文，
+    不能用全局 jira_service——compact 全局无有效会话）。无绑定/无 cookie 返回 None。"""
+    try:
+        sys_path_patch()
+        from jira_service import JiraService
+        from auth_service import AuthService
+        from config.loader import cfg
+        auth = AuthService()  # 读 APP_AUTH_DB_PATH，schema 幂等
+        binding = auth.get_jira_binding_credentials(user_id) or {}
+        if binding.get("auth_type") != "session_cookie":
+            return None
+        cookies = auth.get_jira_session_cookies(user_id) or {}
+        if not cookies.get("JSESSIONID"):
+            return None
+        base_url = (binding.get("jira_base_url") or "").strip() \
+            or os.environ.get("JIRA_BASE_URL", "") or (cfg("jira", "base_url") or "")
+        return JiraService(
+            session_cookies={
+                "JSESSIONID": cookies["JSESSIONID"],
+                "xsrf_token": cookies.get("xsrf_token", ""),
+            },
+            base_url=base_url,
+            include_config_cookies=False,
+            enable_cache=False,
+        )
+    except Exception as e:
+        logger.warning(f"[ProjectIndex] build user jira client failed: {e}")
+        return None
 
 
 _service: Optional[ProjectIndexService] = None

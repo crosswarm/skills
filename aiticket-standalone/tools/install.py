@@ -120,6 +120,7 @@ def ensure_venv(home: Path, full: bool, force: bool) -> None:
 
 def write_config(home: Path, port: int, jira_url: str, kb_dir: str | None) -> None:
     _step("写配置 deployment.yaml + env.json")
+    jira_url = (jira_url or "").strip() or "https://gfjira.yyrd.com"  # 默认内网 Jira
     kb_root = str(Path(kb_dir).expanduser().resolve()) if kb_dir else str(P.kb_dir(home))
     # deployment.yaml（config.loader 经 CONFIG_FILE 读取）
     # 单引号 YAML + 转义（install.py 跑在系统 python，无 PyYAML 依赖；
@@ -256,7 +257,8 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--full", action="store_true", help="装 requirements-full（含报表/pandas）")
     ap.add_argument("--admin-user", default="", help="种子管理员用户名")
     ap.add_argument("--admin-password", default="", help="种子管理员密码")
-    ap.add_argument("--jira-url", default="", help="Jira base_url")
+    ap.add_argument("--jira-url", default="https://gfjira.yyrd.com",
+                    help="Jira base_url（默认 https://gfjira.yyrd.com）")
     ap.add_argument("--kb-dir", default="", help="KB 目录（默认 <home>/kb）")
     ap.add_argument("--no-autostart", action="store_true", help="不注册开机自启")
     ap.add_argument("--no-start", action="store_true", help="装完不自动启动")
@@ -276,13 +278,19 @@ def main(argv: list[str] | None = None) -> int:
             args.src = str(_bundled)
             print(f"[install] 使用随 skill 打包的源码（免 clone）：{_bundled}")
 
+    # 本地单用户免登录：恒建一个本地用户（给 Jira 绑定/skill-token/MCP 一个 user_id）。
+    # 未指定则用 'local' + 随机口令（本地模式不走登录，口令仅占位）。
+    import secrets as _secrets
+    admin_user = args.admin_user or "local"
+    admin_password = args.admin_password or _secrets.token_urlsafe(16)
+
     print(f"aiticket compact 安装 · HOME={home} · 端口={port}")
     make_layout(home)
     obtain_src(home, args.src or None, args.repo, args.branch, args.force)
     ensure_venv(home, args.full, args.force)
     write_config(home, port, args.jira_url, args.kb_dir or None)
-    init_db_and_admin(home, args.admin_user, args.admin_password)
-    generate_skill_token(home, args.admin_user)
+    init_db_and_admin(home, admin_user, admin_password)
+    generate_skill_token(home, admin_user)
     healthy = register_and_start(home, port, args.no_autostart, args.no_start)
     print_summary(home, port, healthy)
     return 0 if (healthy or args.no_start) else 1

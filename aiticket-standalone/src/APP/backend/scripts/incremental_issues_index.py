@@ -30,67 +30,68 @@ def _get_project_keys(project_override: str | None = None) -> list[str]:
     return [k for k in keys if k]
 
 
-def run_for_project(project_key: str, days: int = 2, dry_run: bool = False) -> int:
+def run_for_project(project_key: str, days: int = 2, dry_run: bool = False,
+                    jira_client=None, progress_cb=None) -> int:
+    """拉取最近 `days` 天更新的工单并把未入库的写入向量库。
+
+    jira_client: 显式传入的 JiraService（compact 历史导入用绑定会话的客户端）；
+                 不传则用全局 jira_service。
+    progress_cb(scanned:int, total:int): 每页回调，供进度上报。
+    分页拉全量（12 个月数据可能上千条），逐页写入。
+    """
+    client = jira_client if jira_client is not None else jira_service
     print(f"[IncrementalIndex] [{project_key}] 拉取最近 {days} 天更新的工单...")
 
     vs = open_ticket_vector_store(allow_download=False)
     jql = f'project = "{project_key}" AND updated >= -{days}d ORDER BY updated DESC'
-    try:
-        result = jira_service.search_issues_rest_api(jql, start_at=0, max_results=500)
-    except Exception as e:
-        print(f"[IncrementalIndex] [{project_key}] Jira 查询失败: {e}")
-        return 0
+    page = 200
+    start = 0
+    total: int | None = None
+    added_total = 0
 
-    if "error" in result:
-        print(f"[IncrementalIndex] [{project_key}] Jira 返回错误: {result['error']}")
-        return 0
+    while True:
+        try:
+            result = client.search_issues_rest_api(jql, start_at=start, max_results=page)
+        except Exception as e:
+            print(f"[IncrementalIndex] [{project_key}] Jira 查询失败(start={start}): {e}")
+            break
+        if not isinstance(result, dict) or "error" in result:
+            print(f"[IncrementalIndex] [{project_key}] Jira 返回错误: {result.get('error') if isinstance(result, dict) else result}")
+            break
+        if total is None:
+            total = int(result.get("total", 0) or 0)
+        issues = result.get("issues", [])
+        if not issues:
+            break
 
-    issues = result.get("issues", [])
-    if not issues:
-        print(f"[IncrementalIndex] [{project_key}] 无新工单，跳过")
-        return 0
+        to_add = []
+        for issue in issues:
+            key = issue.get("key", "")
+            if not key or vs.get_issue_by_key(key):
+                continue
+            fields = issue.get("fields", {})
+            summary = fields.get("summary", "")
+            description = (fields.get("description") or summary)[:500]
+            to_add.append({
+                "key": key, "summary": summary, "description": description,
+                "project_key": project_key, "source": "jira_incremental",
+            })
 
-    print(f"[IncrementalIndex] [{project_key}] Jira 返回 {len(issues)} 条工单，检查哪些未入库...")
+        if to_add and not dry_run:
+            vs.batch_add_issues(to_add)
+        added_total += len(to_add)
+        start += len(issues)
+        if progress_cb:
+            try:
+                progress_cb(min(start, total or start), total or start)
+            except Exception:
+                pass
+        print(f"[IncrementalIndex] [{project_key}] 进度 {start}/{total or '?'}，本页新增 {len(to_add)}")
+        if (total and start >= total) or len(issues) < page:
+            break
 
-    to_add = []
-    for issue in issues:
-        key = issue.get("key", "")
-        if not key:
-            continue
-        existing = vs.get_issue_by_key(key)
-        if existing:
-            continue
-        fields = issue.get("fields", {})
-        summary = fields.get("summary", "")
-        description = (fields.get("description") or summary)[:500]
-        to_add.append({
-            "key": key,
-            "summary": summary,
-            "description": description,
-            "project_key": project_key,
-            "source": "jira_incremental",
-        })
-
-    if not to_add:
-        print(f"[IncrementalIndex] [{project_key}] 所有工单均已入库，无需更新")
-        return 0
-
-    print(f"[IncrementalIndex] [{project_key}] 补充写入 {len(to_add)} 条: {[r['key'] for r in to_add[:5]]}")
-    if not dry_run:
-        count_before = vs.issues_collection.count()
-        vs.batch_add_issues(to_add)
-        count_after = vs.issues_collection.count()
-        added = count_after - count_before
-        if added < len(to_add):
-            # 可能存在并发写者或 max_seq_id 未修复，但不硬中止（incremental 可重试）
-            print(f"[IncrementalIndex] [{project_key}] ⚠️ 写入验证：before={count_before} "
-                  f"after={count_after} expected+{len(to_add)} actual+{added}。"
-                  f"若持续出现，请运行 fix_chroma_max_seq_id.py --fix")
-        else:
-            print(f"[IncrementalIndex] [{project_key}] 完成（count {count_before}→{count_after}）")
-    else:
-        print(f"[IncrementalIndex] [{project_key}] dry-run，跳过实际写入")
-    return len(to_add)
+    print(f"[IncrementalIndex] [{project_key}] 完成，共新增 {added_total} 条（扫描 {start}/{total or start}）")
+    return added_total
 
 
 def run(days: int = 2, project_override: str | None = None, dry_run: bool = False) -> int:

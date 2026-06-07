@@ -43,7 +43,9 @@ aiticket-standalone/
 | 命令 | 做什么 |
 |------|--------|
 | `/aiticket-install [--full]` | `python tools/install.py`（默认用随包 `src/` 安装，免 clone；`--full` 加装报表依赖）。装好后服务在 `http://127.0.0.1:18080`，并自动生成 skill token 写入 env.json |
-| `/aiticket-config` | 引导填 Jira 地址 / KB 目录 / 可选 LLM key → 写 `config/deployment.yaml`+`env.json` → restart → 引导装浏览器扩展 |
+| `/aiticket-config` | 引导填**默认项目** / Jira 地址(默认 gfjira.yyrd.com) / 可选 LLM key → 写 `config/deployment.yaml`+`env.json`；默认项目经 `PUT /api/user/settings {current_project}` 写入 → 引导装浏览器扩展 |
+| `/aiticket-kb <目录>` | 指定本地 KB 目录并**自动解析**：先本机校验目录存在 → `POST /api/config/kb-root {path}`（写配置+切目录+触发解析，返 task_id）→ 轮询 `GET /api/kb/refresh/status/{task_id}` 显示进度（step + source_files/chunk_count）至 done |
+| `/aiticket-import [项目]` | 导入某项目近 12 个月历史工单：`POST /api/index/import-history {project_key?,months:12}`（留空用默认项目；需先绑 Jira 会话，否则 409）→ 轮询 `GET /api/index/status?project_key=` 显示百分比至 done |
 | `/aiticket-start` `stop` `restart` `status` `logs` | `python tools/aiticket_ctl.py <cmd>` |
 | `/aiticket-update` | `git -C <HOME>/src pull` → `uv pip install`（热缓存秒级）→ `init_db`（幂等）→ restart |
 | `/aiticket-uninstall [--purge]` | 停服务 + 注销自启；`--purge` 连 data 一起删 |
@@ -51,7 +53,9 @@ aiticket-standalone/
 
 ## 安装
 
-> 📖 **面向安装用户的完整图文指南（前置要求 / 快速开始 / 配置 / 抓 Jira 会话 / 体积说明 / 故障排查 / 卸载）见同目录 [`INSTALL.md`](INSTALL.md)。** 下面是给 Agent 的速查。
+> 📖 **面向使用者的完整图文指南见同目录 [`README.md`](README.md)**（前置要求 / 一条命令安装 / 抓 Jira 会话 / 设默认项目自动导入历史 / 选 KB 目录自动解析 / 故障排查 / 卸载）。下面是给 Agent 的速查。
+>
+> 开箱默认（本轮新增）：① **本地单用户免登录**（localhost 直接进，无登录页；服务仅绑 127.0.0.1）② **Jira 地址默认 `https://gfjira.yyrd.com`** ③ 设默认项目 + 绑会话后 **自动导入近 12 个月历史工单** ④ 选定 KB 目录 **即自动解析 + 进度**。
 
 ```bash
 # 默认用随包 src/ 安装（免 clone）

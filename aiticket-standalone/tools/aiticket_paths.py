@@ -153,6 +153,8 @@ def service_env(home: Path, port: int, extra: dict | None = None) -> dict:
     env = {
         "AITICKET_HOME": str(home),
         "AITICKET_PORT": str(port),
+        # 本地单用户免登录：localhost 请求自动以唯一本地用户身份通过（服务仅绑 127.0.0.1）
+        "AITICKET_LOCAL_MODE": "1",
         # 修复 🔴 auth.db 分裂：init_db/seed_admin 写 <data>/sqlite/auth.db，
         # 此处让 auth_service 读同一文件
         "APP_AUTH_DB_PATH": str(auth_db_path(home)),
