@@ -42,7 +42,7 @@ aiticket-standalone/
 
 | 命令 | 做什么 |
 |------|--------|
-| `/aiticket-install [--full]` | `python tools/install.py`（默认用随包 `src/` 安装，免 clone；`--full` 加装报表依赖）。装好后服务在 `http://127.0.0.1:18080`，并自动生成 skill token 写入 env.json |
+| `/aiticket-install [--full]` | **优先** `bash tools/bootstrap_env.sh`（macOS/Linux）/ `powershell -ExecutionPolicy Bypass -File tools\bootstrap_env.ps1`（Windows）——它**自动检测并安装 git+uv+Python3.12**（分步进度），再跑 `install.py`（默认随包 `src/` 免 clone；`--full` 加报表依赖）→ 预下载向量模型(约120MB,带进度) → 启动 `http://127.0.0.1:18080` → 自动生成 skill token。若环境已具备可直接 `python tools/install.py`。 |
 | `/aiticket-config` | 引导填**默认项目** / Jira 地址(默认 gfjira.yyrd.com) / 可选 LLM key → 写 `config/deployment.yaml`+`env.json`；默认项目经 `PUT /api/user/settings {current_project}` 写入 → 引导装浏览器扩展 |
 | `/aiticket-kb <目录>` | 指定本地 KB 目录并**自动解析**：先本机校验目录存在 → `POST /api/config/kb-root {path}`（写配置+切目录+触发解析，返 task_id）→ 轮询 `GET /api/kb/refresh/status/{task_id}` 显示进度（step + source_files/chunk_count）至 done |
 | `/aiticket-import [项目]` | 导入某项目近 12 个月历史工单：`POST /api/index/import-history {project_key?,months:12}`（留空用默认项目；需先绑 Jira 会话，否则 409）→ 轮询 `GET /api/index/status?project_key=` 显示百分比至 done |
@@ -51,6 +51,28 @@ aiticket-standalone/
 | `/aiticket-uninstall [--purge]` | 停服务 + 注销自启；`--purge` 连 data 一起删 |
 | `/aiticket-mcp` | 打印 MCP 客户端配置片段（把本服务接入 Claude Code / OpenClaw） |
 
+## 自然语言 → 动作（OpenClaw / WorkBuddy 用户）
+
+用户**几乎全用大白话**，不敲斜杠命令。听到下列意图就执行对应动作（命令见上表）：
+
+| 用户大白话（示例） | 执行 |
+|------|------|
+| 「帮我装/安装 aiticket / 本地工单助手」 | 跑 `bootstrap_env`（自动装 git/uv/Python）→ install（含模型预下载）→ 报告网址 |
+| 「连上 Jira / 抓一下 Jira 会话」 | 引导装浏览器扩展或手动贴 JSESSIONID（POST /api/settings/jira-session-binding） |
+| 「我负责 X 项目 / 默认项目设成 X」 | 设默认项目（PUT /api/user/settings current_project=X）；若已绑会话则自动触发历史导入 |
+| 「导入/同步近一年历史工单」「重新导入 X 的历史」 | `/aiticket-import [X]`（POST /api/index/import-history）+ 轮询进度播报 |
+| 「把 …目录 设成知识库 / 解析我的文档」 | `/aiticket-kb <目录>`（POST /api/config/kb-root）+ 轮询解析进度播报 |
+| 「服务还在吗/状态/重启/看日志/更新/卸载」 | 对应 ctl 命令 |
+| 「接进 MCP / 给 Claude Code 当工具」 | `/aiticket-mcp` 打印配置 |
+
+## 进度管理（必做）
+
+任何"会让用户等待"的操作，**必须实时把进度播报给用户**，不要让用户黑屏干等：
+- **安装环境/依赖/模型**：`bootstrap_env` 与 `install.py` 自带分步进度与下载百分比——把它们的输出原样/概括转述给用户（如"正在下载中文模型 120MB… 45%"）。
+- **历史导入**：触发后**轮询** `GET /api/index/status?project_key=`，每隔几秒播报 `percent`（已处理 N/共 M 条）直到 `status=done`。
+- **KB 解析**：触发后**轮询** `GET /api/kb/refresh/status/{task_id}`，播报 `step` 与 `sync.source_files`/`chunk_count` 直到 `status=done`。
+- 失败要给可读原因 + 下一步建议（如"未绑定 Jira 会话→请先连 Jira"）。
+
 ## 安装
 
 > 📖 **面向使用者的完整图文指南见同目录 [`README.md`](README.md)**（前置要求 / 一条命令安装 / 抓 Jira 会话 / 设默认项目自动导入历史 / 选 KB 目录自动解析 / 故障排查 / 卸载）。下面是给 Agent 的速查。
@@ -58,12 +80,15 @@ aiticket-standalone/
 > 开箱默认（本轮新增）：① **本地单用户免登录**（localhost 直接进，无登录页；服务仅绑 127.0.0.1）② **Jira 地址默认 `https://gfjira.yyrd.com`** ③ 设默认项目 + 绑会话后 **自动导入近 12 个月历史工单** ④ 选定 KB 目录 **即自动解析 + 进度**。
 
 ```bash
-# 默认用随包 src/ 安装（免 clone）
-python tools/install.py --admin-user admin --admin-password '<设个密码>' --jira-url https://jira.example.com
-# 或从其它 checkout / git 仓安装
-python tools/install.py --src /path/to/aiticket --admin-user admin --admin-password '***'
+# 推荐：一条命令自动装 git/uv/Python 3.12 + 装服务（全程进度）
+bash tools/bootstrap_env.sh                                         # macOS / Linux
+powershell -ExecutionPolicy Bypass -File tools\bootstrap_env.ps1    # Windows
+# 环境已具备时也可直接（免参数：本地免登录 + Jira 默认 gfjira + 自动建本地用户）：
+python tools/install.py
 ```
 要点：
+- 无需 `--admin-*`/`--jira-url`：默认本地单用户免登录、Jira=gfjira.yyrd.com、自动建本地用户。
+- 装完自动**预下载向量模型**（约 120MB，带进度；`--no-warmup` 可跳过；EMBEDDING_PROVIDER=api/hash 自动跳过）。
 - 装完自动 `generate_skill_token` 写入 `<HOME>/config/env.json`，MCP / 浏览器扩展开箱即用鉴权。
 - 自启：macOS=launchd、Linux=systemd --user、Windows=计划任务；不注册加 `--no-autostart`（改用 pidfile，不写系统单元）。
 - 打开 `http://127.0.0.1:18080` 即见登录 → 智能看板。

@@ -197,6 +197,26 @@ def generate_skill_token(home: Path, admin_user: str) -> None:
         print(f"  ⚠ 生成失败（可稍后手动 make_skill_token.py）：{(r.stderr or '').strip()[:160]}")
 
 
+def warmup_model(home: Path) -> None:
+    """预下载本地中文向量模型（约 120MB，仅一次），显示下载进度，
+    免得首次解析 KB 时静默长等。EMBEDDING_PROVIDER=api/hash 时自动跳过。"""
+    prov = os.environ.get("EMBEDDING_PROVIDER", "fastembed").lower()
+    if prov in ("api", "hash"):
+        print(f"  ⏭ EMBEDDING_PROVIDER={prov}，跳过本地模型下载")
+        return
+    _step("预下载中文向量模型（约 120MB，仅一次，下方显示下载进度）")
+    vpy = P.venv_python(home)
+    backend = P.backend_dir(home)
+    env = {**os.environ, **P.service_env(home, P.resolve_port(home))}
+    code = ("from services.embedding_provider import get_embedding_provider; "
+            "get_embedding_provider().embed(['warmup']); print('MODEL_READY')")
+    r = _run([str(vpy), "-c", code], cwd=backend, env=env, check=False)
+    if r.returncode == 0:
+        print("  ✓ 向量模型就绪（之后解析 KB / 检索均离线可用）")
+    else:
+        print("  ⚠ 模型预下载未完成（不影响安装；首次解析 KB 时会自动重试下载）")
+
+
 def register_and_start(home: Path, port: int, no_autostart: bool, no_start: bool) -> bool:
     if no_autostart:
         # 非持久启动：用 pidfile 后端，绝不写 launchd/systemd 持久单元
@@ -262,6 +282,7 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--kb-dir", default="", help="KB 目录（默认 <home>/kb）")
     ap.add_argument("--no-autostart", action="store_true", help="不注册开机自启")
     ap.add_argument("--no-start", action="store_true", help="装完不自动启动")
+    ap.add_argument("--no-warmup", action="store_true", help="跳过预下载向量模型（首次解析 KB 时再下）")
     ap.add_argument("--force", action="store_true", help="重建 src/venv")
     return ap
 
@@ -291,6 +312,8 @@ def main(argv: list[str] | None = None) -> int:
     write_config(home, port, args.jira_url, args.kb_dir or None)
     init_db_and_admin(home, admin_user, admin_password)
     generate_skill_token(home, admin_user)
+    if not args.no_warmup:
+        warmup_model(home)
     healthy = register_and_start(home, port, args.no_autostart, args.no_start)
     print_summary(home, port, healthy)
     return 0 if (healthy or args.no_start) else 1
