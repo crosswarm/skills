@@ -138,7 +138,9 @@ async function getSharedLLMConfig(apiBase = API_BASE, options = {}) {
       return { provider: "none", apiKey: "", modelName: "", baseUrl: "" };
     }
 
-    const providerConfig = config[provider] || {};
+    // 新 per-user 端点返回 {providers:{p:{...}}, last_provider}；兼容旧扁平结构
+    const providers = config.providers || config;
+    const providerConfig = providers[provider] || {};
     return {
       provider,
       apiKey: providerConfig.api_key || "",
@@ -407,9 +409,23 @@ window.DSLLMConfig = (function () {
   var MODAL_ID = "ds-llm-config-modal";
   var BASE = typeof getAPIBase === "function" ? getAPIBase() : "";
   var API = BASE + "/api/config/llm";
+  var SYSTEM_API = BASE + "/api/config/llm/system";
   var FEATURES_API = BASE + "/api/config/llm/features";
   var _isAdmin = false;
   var _activeTab = "my";
+  var _myCfg = {}; // 当前用户已配 provider 映射（后端真相源）
+  var _sysCfg = {}; // 系统级 provider 映射（仅 admin）
+  // 真相源是后端；localStorage 仅作离线/本地缓存回显
+  var PROVIDERS = [
+    "gemini",
+    "openai",
+    "aliyun",
+    "minimax",
+    "deepseek",
+    "zhipu",
+    "kimi",
+    "local",
+  ];
 
   var tabStyle =
     "padding:8px 16px;border:none;border-bottom:2px solid transparent;background:none;cursor:pointer;font-size:var(--ds-text-sm);color:var(--ds-text-muted);";
@@ -424,6 +440,49 @@ window.DSLLMConfig = (function () {
     "padding:8px 16px;border:1px solid var(--ds-border);border-radius:var(--ds-radius-md);background:none;cursor:pointer;color:var(--ds-text-secondary);font-size:var(--ds-text-sm);";
   var btnPrimaryStyle =
     "padding:8px 16px;border:none;border-radius:var(--ds-radius-md);background:var(--ds-accent);color:white;cursor:pointer;font-size:var(--ds-text-sm);";
+  // 系统级（管理员）区域：醒目边框 + 底色，与用户个人配置强区分
+  var sysBoxStyle =
+    "margin-top:18px;padding:14px;border:2px solid #d97706;border-radius:var(--ds-radius-md);background:rgba(217,119,6,0.06);";
+  var sysTitleStyle =
+    "margin:0 0 4px;font-size:var(--ds-text-sm);font-weight:var(--ds-font-semibold);color:#b45309;display:flex;align-items:center;gap:6px;";
+  var sysHintStyle =
+    "margin:0 0 10px;font-size:var(--ds-text-xs);color:#92400e;";
+
+  function _esc(v) {
+    return String(v == null ? "" : v)
+      .replace(/"/g, "&quot;")
+      .replace(/</g, "&lt;");
+  }
+
+  // 本地缓存（离线回显），后端保存成功后以后端为准
+  function _cacheProvider(provider, cfg) {
+    try {
+      localStorage.setItem("llm_last_provider", provider);
+      localStorage.setItem(
+        "llm_config_" + provider,
+        JSON.stringify({
+          apiKey: cfg.api_key || "",
+          modelName: cfg.model_name || "",
+          baseUrl: cfg.base_url || "",
+        }),
+      );
+    } catch (e) {}
+  }
+
+  function _readCache(provider) {
+    try {
+      var raw = localStorage.getItem("llm_config_" + provider);
+      if (!raw) return null;
+      var c = JSON.parse(raw);
+      return {
+        api_key: c.apiKey || "",
+        model_name: c.modelName || "",
+        base_url: c.baseUrl || "",
+      };
+    } catch (e) {
+      return null;
+    }
+  }
 
   function ensureModal() {
     if (document.getElementById(MODAL_ID)) return;
@@ -500,81 +559,269 @@ window.DSLLMConfig = (function () {
     if (m) m.style.display = "none";
   }
 
+  // 渲染当前用户个人配置表单（后端为真相源），admin 额外渲染系统级区
+  function _renderMyConfig(provider) {
+    var body = document.getElementById("ds-llm-config-body");
+    if (!body) return;
+    var current = _myCfg[provider] || _readCache(provider) || {};
+    var html =
+      '<div style="display:flex;flex-direction:column;gap:12px;">' +
+      '<p style="margin:0;font-size:var(--ds-text-xs);color:var(--ds-text-muted);">这是你的个人 LLM 配置，仅对你自己生效（不影响其他用户）。</p>' +
+      '<label style="font-size:var(--ds-text-sm);color:var(--ds-text-secondary);">Provider' +
+      '<select id="ds-llm-provider" style="' +
+      inputStyle +
+      '" onchange="DSLLMConfig._onProviderChange(this.value)">' +
+      PROVIDERS.map(function (p) {
+        return (
+          '<option value="' +
+          p +
+          '"' +
+          (p === provider ? " selected" : "") +
+          ">" +
+          p +
+          "</option>"
+        );
+      }).join("") +
+      "</select></label>" +
+      '<label style="font-size:var(--ds-text-sm);color:var(--ds-text-secondary);">API Key' +
+      '<input id="ds-llm-apikey" type="password" value="' +
+      _esc(current.api_key) +
+      '" style="' +
+      inputStyle +
+      '"></label>' +
+      '<label style="font-size:var(--ds-text-sm);color:var(--ds-text-secondary);">Model Name' +
+      '<input id="ds-llm-model" value="' +
+      _esc(current.model_name) +
+      '" style="' +
+      inputStyle +
+      '" placeholder="e.g. gemini-2.0-flash"></label>' +
+      '<label style="font-size:var(--ds-text-sm);color:var(--ds-text-secondary);">Base URL (可选)' +
+      '<input id="ds-llm-baseurl" value="' +
+      _esc(current.base_url) +
+      '" style="' +
+      inputStyle +
+      '" placeholder="留空使用默认"></label>' +
+      '<div id="ds-llm-test-result" style="display:none;padding:8px 12px;border-radius:var(--ds-radius-md);font-size:var(--ds-text-sm);margin-top:4px;"></div>' +
+      '<div style="display:flex;gap:8px;justify-content:space-between;align-items:center;margin-top:8px;">' +
+      '<button onclick="DSLLMConfig.test()" id="ds-llm-test-btn" style="' +
+      btnStyle +
+      '">测试连接</button>' +
+      '<div style="display:flex;gap:8px;">' +
+      '<button onclick="DSLLMConfig.deleteProvider()" style="' +
+      btnStyle +
+      ';color:var(--ds-danger);" title="删除当前 provider 的个人配置">删除</button>' +
+      '<button onclick="DSLLMConfig.save()" style="' +
+      btnPrimaryStyle +
+      '">保存</button>' +
+      "</div></div>" +
+      // admin 专属系统级区占位（loadSystemConfig 异步填充）
+      (_isAdmin ? '<div id="ds-llm-system-region"></div>' : "") +
+      "</div>";
+    body.innerHTML = html;
+    if (_isAdmin) loadSystemConfig();
+  }
+
   function loadConfig() {
     var body = document.getElementById("ds-llm-config-body");
     body.innerHTML = '<p style="color:var(--ds-text-muted);">加载中...</p>';
-    fetch(API)
+    fetch(API, { credentials: "include" })
       .then(function (r) {
         return r.json();
       })
       .then(function (cfg) {
-        var provider = cfg.last_provider || "gemini";
-        var providers = [
-          "gemini",
-          "openai",
-          "aliyun",
-          "minimax",
-          "deepseek",
-          "zhipu",
-          "kimi",
-          "local",
-        ];
-        var current = cfg[provider] || {};
-        body.innerHTML =
-          '<div style="display:flex;flex-direction:column;gap:12px;">' +
-          '<label style="font-size:var(--ds-text-sm);color:var(--ds-text-secondary);">Provider' +
-          '<select id="ds-llm-provider" style="' +
-          inputStyle +
-          '" onchange="DSLLMConfig._onProviderChange(this.value)">' +
-          providers
-            .map(function (p) {
-              return (
-                '<option value="' +
-                p +
-                '"' +
-                (p === provider ? " selected" : "") +
-                ">" +
-                p +
-                "</option>"
-              );
-            })
-            .join("") +
-          "</select></label>" +
-          '<label style="font-size:var(--ds-text-sm);color:var(--ds-text-secondary);">API Key' +
-          '<input id="ds-llm-apikey" type="password" value="' +
-          (current.api_key || "") +
-          '" style="' +
-          inputStyle +
-          '"></label>' +
-          '<label style="font-size:var(--ds-text-sm);color:var(--ds-text-secondary);">Model Name' +
-          '<input id="ds-llm-model" value="' +
-          (current.model_name || "") +
-          '" style="' +
-          inputStyle +
-          '" placeholder="e.g. gemini-2.0-flash"></label>' +
-          '<label style="font-size:var(--ds-text-sm);color:var(--ds-text-secondary);">Base URL (可选)' +
-          '<input id="ds-llm-baseurl" value="' +
-          (current.base_url || "") +
-          '" style="' +
-          inputStyle +
-          '" placeholder="留空使用默认"></label>' +
-          '<div id="ds-llm-test-result" style="display:none;padding:8px 12px;border-radius:var(--ds-radius-md);font-size:var(--ds-text-sm);margin-top:4px;"></div>' +
-          '<div style="display:flex;gap:8px;justify-content:space-between;align-items:center;margin-top:8px;">' +
-          '<button onclick="DSLLMConfig.test()" id="ds-llm-test-btn" style="' +
-          btnStyle +
-          '">测试连接</button>' +
-          '<div style="display:flex;gap:8px;">' +
-          '<button onclick="DSLLMConfig.close()" style="' +
-          btnStyle +
-          '">取消</button>' +
-          '<button onclick="DSLLMConfig.save()" style="' +
-          btnPrimaryStyle +
-          '">保存</button>' +
-          "</div></div></div>";
+        // 契约：{providers:{p:{api_key,model_name,base_url}}, last_provider}
+        // 兼容旧版扁平结构 cfg[p]
+        _myCfg = cfg && cfg.providers ? cfg.providers : {};
+        if (!cfg || !cfg.providers) {
+          PROVIDERS.forEach(function (p) {
+            if (cfg && cfg[p]) _myCfg[p] = cfg[p];
+          });
+        }
+        var provider =
+          (cfg && cfg.last_provider) ||
+          (function () {
+            try {
+              return localStorage.getItem("llm_last_provider");
+            } catch (e) {
+              return null;
+            }
+          })() ||
+          "gemini";
+        _renderMyConfig(provider);
       })
       .catch(function () {
-        body.innerHTML =
-          '<p style="color:var(--ds-danger);">加载失败，请检查后端服务</p>';
+        // 后端不可达：用本地缓存离线回显，并提示
+        var provider = "gemini";
+        try {
+          provider = localStorage.getItem("llm_last_provider") || "gemini";
+        } catch (e) {}
+        _myCfg = {};
+        _renderMyConfig(provider);
+        if (typeof showToast === "function")
+          showToast("无法连接后端，已离线回显本地缓存", "warning");
+      });
+  }
+
+  // 系统级 LLM（仅 admin）：醒目区块，读写 /api/config/llm/system
+  function loadSystemConfig() {
+    var region = document.getElementById("ds-llm-system-region");
+    if (!region) return;
+    region.innerHTML =
+      '<div style="' +
+      sysHintStyle +
+      'margin-top:18px;">加载系统级配置...</div>';
+    fetch(SYSTEM_API, { credentials: "include" })
+      .then(function (r) {
+        return r.json();
+      })
+      .then(function (cfg) {
+        _sysCfg = cfg && cfg.providers ? cfg.providers : cfg || {};
+        var sp =
+          (cfg && cfg.last_provider) || Object.keys(_sysCfg)[0] || "gemini";
+        _renderSystemConfig(sp);
+      })
+      .catch(function () {
+        region.innerHTML =
+          '<div style="' +
+          sysBoxStyle +
+          '"><div style="' +
+          sysHintStyle +
+          '">系统级配置加载失败</div></div>';
+      });
+  }
+
+  function _renderSystemConfig(provider) {
+    var region = document.getElementById("ds-llm-system-region");
+    if (!region) return;
+    var current = _sysCfg[provider] || {};
+    region.innerHTML =
+      '<div style="' +
+      sysBoxStyle +
+      '">' +
+      '<p style="' +
+      sysTitleStyle +
+      '"><span>⚙️ 系统级 LLM · 仅管理员 · 全局兜底</span></p>' +
+      '<p style="' +
+      sysHintStyle +
+      '">此配置面向所有用户，作为开启兜底功能时的后备凭据，与上方你的个人配置相互独立。</p>' +
+      '<div style="display:flex;flex-direction:column;gap:10px;">' +
+      '<label style="font-size:var(--ds-text-sm);color:#92400e;">Provider' +
+      '<select id="ds-sys-provider" style="' +
+      inputStyle +
+      '" onchange="DSLLMConfig._onSysProviderChange(this.value)">' +
+      PROVIDERS.map(function (p) {
+        return (
+          '<option value="' +
+          p +
+          '"' +
+          (p === provider ? " selected" : "") +
+          ">" +
+          p +
+          "</option>"
+        );
+      }).join("") +
+      "</select></label>" +
+      '<label style="font-size:var(--ds-text-sm);color:#92400e;">API Key' +
+      '<input id="ds-sys-apikey" type="password" value="' +
+      _esc(current.api_key) +
+      '" style="' +
+      inputStyle +
+      '"></label>' +
+      '<label style="font-size:var(--ds-text-sm);color:#92400e;">Model Name' +
+      '<input id="ds-sys-model" value="' +
+      _esc(current.model_name) +
+      '" style="' +
+      inputStyle +
+      '" placeholder="e.g. gemini-2.0-flash"></label>' +
+      '<label style="font-size:var(--ds-text-sm);color:#92400e;">Base URL (可选)' +
+      '<input id="ds-sys-baseurl" value="' +
+      _esc(current.base_url) +
+      '" style="' +
+      inputStyle +
+      '" placeholder="留空使用默认"></label>' +
+      '<div style="display:flex;justify-content:flex-end;">' +
+      '<button onclick="DSLLMConfig._saveSystem()" style="' +
+      btnPrimaryStyle +
+      ';background:#d97706;">保存系统级配置</button>' +
+      "</div></div></div>";
+  }
+
+  function onSysProviderChange(provider) {
+    _renderSystemConfig(provider);
+  }
+
+  function saveSystem() {
+    var provider = document.getElementById("ds-sys-provider").value;
+    var payload = {
+      provider: provider,
+      api_key: document.getElementById("ds-sys-apikey").value,
+      model_name: document.getElementById("ds-sys-model").value,
+      base_url: document.getElementById("ds-sys-baseurl").value,
+    };
+    fetch(SYSTEM_API, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(payload),
+    })
+      .then(function (r) {
+        return r.json().then(function (j) {
+          return { ok: r.ok, body: j };
+        });
+      })
+      .then(function (res) {
+        if (res.ok && res.body.status !== "error") {
+          _sysCfg[provider] = {
+            api_key: payload.api_key,
+            model_name: payload.model_name,
+            base_url: payload.base_url,
+          };
+          if (typeof showToast === "function")
+            showToast("系统级配置已保存", "success");
+        } else {
+          if (typeof showToast === "function")
+            showToast(
+              res.body.detail || res.body.message || "保存失败",
+              "error",
+            );
+        }
+      })
+      .catch(function () {
+        if (typeof showToast === "function") showToast("保存失败", "error");
+      });
+  }
+
+  // 删除当前 provider 的个人配置
+  function deleteProvider() {
+    var provider = document.getElementById("ds-llm-provider").value;
+    fetch(API + "/" + encodeURIComponent(provider), {
+      method: "DELETE",
+      credentials: "include",
+    })
+      .then(function (r) {
+        return r.json().then(function (j) {
+          return { ok: r.ok, body: j };
+        });
+      })
+      .then(function (res) {
+        if (res.ok && res.body.status !== "error") {
+          delete _myCfg[provider];
+          try {
+            localStorage.removeItem("llm_config_" + provider);
+          } catch (e) {}
+          if (typeof showToast === "function")
+            showToast("已删除该 provider 的个人配置", "success");
+          _renderMyConfig(provider);
+        } else {
+          if (typeof showToast === "function")
+            showToast(
+              res.body.detail || res.body.message || "删除失败",
+              "error",
+            );
+        }
+      })
+      .catch(function () {
+        if (typeof showToast === "function") showToast("删除失败", "error");
       });
   }
 
@@ -589,7 +836,19 @@ window.DSLLMConfig = (function () {
         var routing = data.routing || {};
         var features = data.features || [];
         var providers = data.available_providers || [];
+        var fallback = data.fallback || {};
         var defaultProvider = routing._default || "";
+
+        function makeToggle(featureId, on) {
+          return (
+            '<label style="display:inline-flex;align-items:center;gap:4px;font-size:var(--ds-text-xs);color:var(--ds-text-muted);white-space:nowrap;cursor:pointer;">' +
+            '<input type="checkbox" id="ds-fb-' +
+            featureId +
+            '"' +
+            (on ? " checked" : "") +
+            ' style="cursor:pointer;">系统兜底</label>'
+          );
+        }
 
         function makeSelect(featureId, selected) {
           var opts =
@@ -624,6 +883,9 @@ window.DSLLMConfig = (function () {
               '<span style="flex:1;font-size:var(--ds-text-sm);color:var(--ds-text-primary);">' +
               f.name +
               "</span>" +
+              '<div style="width:96px;text-align:right;">' +
+              makeToggle(f.id, !!fallback[f.id]) +
+              "</div>" +
               '<div style="width:180px;">' +
               makeSelect(f.id, routing[f.id] || "") +
               "</div>" +
@@ -634,9 +896,11 @@ window.DSLLMConfig = (function () {
 
         body.innerHTML =
           '<div style="display:flex;flex-direction:column;gap:4px;">' +
-          '<p style="font-size:var(--ds-text-xs);color:var(--ds-text-muted);margin:0 0 8px;">为系统后台功能指定 LLM Provider，API Key 复用已配置的 Provider 凭据。</p>' +
+          '<p style="font-size:var(--ds-text-xs);color:var(--ds-text-muted);margin:0 0 4px;">为系统后台功能指定 LLM Provider，API Key 复用已配置的 Provider 凭据。</p>' +
+          '<p style="font-size:var(--ds-text-xs);color:var(--ds-text-muted);margin:0 0 8px;line-height:1.5;"><b>系统兜底</b>：关＝该功能强制使用用户自配 LLM（用户没配则报错引导）；开＝用户没配时回退使用系统级 LLM。智能回复等默认关。</p>' +
           '<div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:2px solid var(--ds-border);">' +
           '<span style="flex:1;font-size:var(--ds-text-sm);font-weight:var(--ds-font-semibold);color:var(--ds-text-primary);">系统默认</span>' +
+          '<div style="width:96px;"></div>' +
           '<div style="width:180px;">' +
           makeSelect("_default", defaultProvider) +
           "</div>" +
@@ -664,11 +928,18 @@ window.DSLLMConfig = (function () {
       var featureId = sel.id.replace("ds-fr-", "");
       if (sel.value) routing[featureId] = sel.value;
     });
+    // 逐功能"允许系统级兜底"开关
+    var fallback = {};
+    var toggles = document.querySelectorAll("[id^='ds-fb-']");
+    toggles.forEach(function (cb) {
+      var featureId = cb.id.replace("ds-fb-", "");
+      fallback[featureId] = !!cb.checked;
+    });
     fetch(FEATURES_API, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
-      body: JSON.stringify({ routing: routing }),
+      body: JSON.stringify({ routing: routing, fallback: fallback }),
     })
       .then(function (r) {
         return r.json();
@@ -693,33 +964,41 @@ window.DSLLMConfig = (function () {
     var apiKey = document.getElementById("ds-llm-apikey").value;
     var modelName = document.getElementById("ds-llm-model").value;
     var baseUrl = document.getElementById("ds-llm-baseurl").value;
+    var payload = {
+      provider: provider,
+      api_key: apiKey,
+      model_name: modelName,
+      base_url: baseUrl,
+    };
     fetch(API, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        provider: provider,
-        api_key: apiKey,
-        model_name: modelName,
-        base_url: baseUrl,
-      }),
+      credentials: "include",
+      body: JSON.stringify(payload),
     })
       .then(function (r) {
-        return r.json();
+        return r.json().then(function (j) {
+          return { ok: r.ok, body: j };
+        });
       })
-      .then(function () {
-        try {
-          localStorage.setItem("llm_last_provider", provider);
-          localStorage.setItem(
-            "llm_config_" + provider,
-            JSON.stringify({
-              apiKey: apiKey,
-              modelName: modelName,
-              baseUrl: baseUrl,
-            }),
-          );
-        } catch (e) {}
+      .then(function (res) {
+        if (!res.ok || res.body.status === "error") {
+          if (typeof showToast === "function")
+            showToast(
+              res.body.detail || res.body.message || "保存失败",
+              "error",
+            );
+          return;
+        }
+        // 后端为准：更新内存缓存 + 本地离线缓存
+        _myCfg[provider] = {
+          api_key: apiKey,
+          model_name: modelName,
+          base_url: baseUrl,
+        };
+        _cacheProvider(provider, payload);
         if (typeof showToast === "function")
-          showToast("AI 配置已保存", "success");
+          showToast("个人 AI 配置已保存", "success");
         close();
       })
       .catch(function () {
@@ -727,17 +1006,15 @@ window.DSLLMConfig = (function () {
       });
   }
 
+  // 切换 provider 时从已加载的后端缓存回显，避免重复请求
   function onProviderChange(provider) {
-    fetch(API)
-      .then(function (r) {
-        return r.json();
-      })
-      .then(function (cfg) {
-        var c = cfg[provider] || {};
-        document.getElementById("ds-llm-apikey").value = c.api_key || "";
-        document.getElementById("ds-llm-model").value = c.model_name || "";
-        document.getElementById("ds-llm-baseurl").value = c.base_url || "";
-      });
+    var c = _myCfg[provider] || _readCache(provider) || {};
+    var keyEl = document.getElementById("ds-llm-apikey");
+    var modelEl = document.getElementById("ds-llm-model");
+    var baseEl = document.getElementById("ds-llm-baseurl");
+    if (keyEl) keyEl.value = c.api_key || "";
+    if (modelEl) modelEl.value = c.model_name || "";
+    if (baseEl) baseEl.value = c.base_url || "";
   }
 
   function test() {
@@ -764,6 +1041,7 @@ window.DSLLMConfig = (function () {
     fetch(testApi, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      credentials: "include",
       body: JSON.stringify({
         provider: provider,
         api_key: apiKey,
@@ -802,7 +1080,10 @@ window.DSLLMConfig = (function () {
     close: close,
     save: save,
     test: test,
+    deleteProvider: deleteProvider,
     _onProviderChange: onProviderChange,
+    _onSysProviderChange: onSysProviderChange,
+    _saveSystem: saveSystem,
     _switchTab: switchTab,
     _saveFeatureRouting: saveFeatureRouting,
   };

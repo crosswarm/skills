@@ -38,16 +38,21 @@ class LLMService:
                 error_str = str(e).lower()
 
                 # Determine if error is retryable
-                # NOTE: 'overloaded'/'529'/'resource exhausted' are NOT retried —
-                # retrying a saturated upstream just wastes 45s per attempt and
-                # blocks FastAPI thread pool threads, eventually freezing the service.
+                # NOTE: rate-limit / quota / 429 / saturation are NOT retried —
+                # retrying a 429'd or saturated upstream in-place burns the retry
+                # budget (3×backoff) AND holds a FastAPI thread-pool thread for the
+                # whole window, eventually freezing the single worker. The correct
+                # resilience path for 429 is provider failover (the reply routing
+                # chain), not in-place retry. Root cause of the 2026-05/06 MiniMax
+                # 429 retry storm.
                 retryable_errors = [
-                    'rate limit', 'quota exceeded', 'timeout', 'connection',
-                    'internal error', '503', '502', '429',
+                    'timeout', 'connection',
+                    'internal error', '503', '502',
                     'temporarily unavailable'
                 ]
-                # Fail-fast on upstream saturation — do NOT retry
-                fatal_errors = ['overloaded', 'resource exhausted', '529']
+                # Fail-fast on saturation / rate-limit / quota — do NOT retry
+                fatal_errors = ['overloaded', 'resource exhausted', '529',
+                                'rate limit', 'quota', '429', 'too many requests']
                 if any(fe in error_str for fe in fatal_errors):
                     raise e
                 is_retryable = any(err in error_str for err in retryable_errors)

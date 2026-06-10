@@ -157,13 +157,13 @@ def query_facts(text: str, top_k: int = 10) -> list[str]:
     检索与 text 最相关的产品事实。
     返回 fact 文本列表（已去重，按相关度排序）。
     若 Chroma 不可用则返回空列表，调用方应 fallback 到全文截断。
-    """
-    # 先检查 mtime 是否变更，变更则重索引
-    try:
-        reindex()
-    except Exception as e:
-        print(f"[FactsIndexer] 重索引失败 (继续用旧索引): {e}")
 
+    注意：本函数【不做 per-request reindex】。此前每次回复请求都无条件调 reindex()
+    （靠 mtime 门跳过），但一旦 product_facts.md 改动，下一个回复请求就会在 reply 的
+    线程池槽内同步全量重建 + 懒加载第二个 embedding 模型(+0.4-0.5GB)，造成回复尖峰。
+    索引新鲜度改由定时任务 daily-kb-reindex-watchdog(product_facts_indexer.py --force)
+    维护；本函数仅在集合为空(冷启)时兜底重建一次。
+    """
     col = _ensure_collection()
     if col is None:
         return []
@@ -171,7 +171,17 @@ def query_facts(text: str, top_k: int = 10) -> list[str]:
     try:
         count = col.count()
         if count == 0:
-            return []
+            # 冷启兜底：集合为空时重建一次（非每请求）
+            try:
+                reindex()
+            except Exception as e:
+                print(f"[FactsIndexer] 冷启重索引失败: {e}")
+            col = _ensure_collection()
+            if col is None:
+                return []
+            count = col.count()
+            if count == 0:
+                return []
         n = min(top_k, count)
         results = col.query(query_texts=[text], n_results=n, include=["documents"])
         docs = results.get("documents", [[]])[0]

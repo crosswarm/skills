@@ -280,7 +280,7 @@
                 </div>
             </div>
 
-            <p class="text-xs text-slate-500 mt-2">配置仅存储在本地浏览器中。</p>
+            <p class="text-xs text-slate-500 mt-2">这是你的个人 LLM 配置，仅对你自己生效，保存后同步到你的账号（本地仅作缓存）。</p>
 
             <div class="flex justify-end gap-3 mt-6">
                 <button onclick="closeSettings()" class="px-4 py-2 text-slate-500 hover:text-slate-700">取消</button>
@@ -489,7 +489,34 @@
             };
         }
 
-        function openSettings() {
+        // 当前用户个人 LLM 配置：后端为真相源（localStorage 仅作缓存）
+        async function syncMyLLMConfigFromServer() {
+            try {
+                const r = await fetch(`${API_BASE}/api/config/llm`, { credentials: 'include' });
+                if (!r.ok) return; // 未登录/不可达：保持本地缓存
+                const cfg = await r.json();
+                const providers = (cfg && cfg.providers) ? cfg.providers : (cfg || {});
+                Object.keys(providers || {}).forEach(p => {
+                    const c = providers[p] || {};
+                    try {
+                        localStorage.setItem(`llm_config_${p}`, JSON.stringify({
+                            apiKey: c.api_key || '',
+                            modelName: c.model_name || '',
+                            baseUrl: c.base_url || ''
+                        }));
+                    } catch (e) {}
+                });
+                if (cfg && cfg.last_provider) {
+                    currentProvider = cfg.last_provider;
+                    try { localStorage.setItem('llm_last_provider', cfg.last_provider); } catch (e) {}
+                }
+            } catch (e) { /* 离线：沿用本地缓存 */ }
+        }
+
+        async function openSettings() {
+            // 先从后端拉取当前用户的个人配置（真相源），失败则沿用本地缓存
+            await syncMyLLMConfigFromServer();
+
             // Restore last selected provider
             document.getElementById('providerSelect').value = currentProvider;
 
@@ -620,26 +647,48 @@
             }
         }
 
-        function saveSettings() {
+        async function saveSettings() {
             const provider = document.getElementById('providerSelect').value;
             const key = document.getElementById('apiKeyInput').value.trim();
             const model = document.getElementById('modelNameInput').value.trim();
             const base = document.getElementById('baseUrlInput').value.trim();
 
-            if (key || provider === 'none') {
-                const config = { apiKey: key, modelName: model, baseUrl: base };
-                localStorage.setItem(`llm_config_${provider}`, JSON.stringify(config));
-                localStorage.setItem('llm_last_provider', provider);
-
-                // Update global state
-                currentProvider = provider;
-                currentConfig = config;
-
-                showToast('配置已保存 (Settings Saved)');
-                closeSettings();
-            } else {
+            if (!(key || provider === 'none')) {
                 showToast('请输入 API Key', 'error');
+                return;
             }
+
+            const config = { apiKey: key, modelName: model, baseUrl: base };
+            // localStorage 仅作本地缓存/离线回显
+            localStorage.setItem(`llm_config_${provider}`, JSON.stringify(config));
+            localStorage.setItem('llm_last_provider', provider);
+            currentProvider = provider;
+            currentConfig = config;
+
+            // 真相源是后端：把个人配置写到当前用户（'none' 仅本地关闭，不入库）
+            if (provider !== 'none') {
+                try {
+                    const r = await fetch(`${API_BASE}/api/config/llm`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'include',
+                        body: JSON.stringify({ provider, api_key: key, model_name: model, base_url: base })
+                    });
+                    if (!r.ok) {
+                        const j = await r.json().catch(() => ({}));
+                        showToast(j.detail || j.message || '已本地保存，但同步到服务器失败', 'error');
+                        closeSettings();
+                        return;
+                    }
+                } catch (e) {
+                    showToast('已本地保存，但无法连接服务器', 'error');
+                    closeSettings();
+                    return;
+                }
+            }
+
+            showToast('个人配置已保存');
+            closeSettings();
         }
 
         // Image Handling

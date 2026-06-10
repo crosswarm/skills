@@ -171,6 +171,31 @@ class AuthService:
                 )"""
             )
 
+            # 用户级 LLM 凭据表（每个用户对每个 provider 的 api_key/model/base_url）
+            # api_key 加密存储（_fernet），与 jira_bindings 同样的加密范式
+            conn.execute(
+                """CREATE TABLE IF NOT EXISTS user_llm_config (
+                  user_id    TEXT NOT NULL,
+                  provider   TEXT NOT NULL,
+                  api_key    TEXT NOT NULL DEFAULT '',
+                  model_name TEXT NOT NULL DEFAULT '',
+                  base_url   TEXT NOT NULL DEFAULT '',
+                  updated_at TEXT NOT NULL,
+                  PRIMARY KEY (user_id, provider),
+                  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                )"""
+            )
+
+            # 用户默认 provider（智能回复等用户面功能的"我的默认模型"）
+            conn.execute(
+                """CREATE TABLE IF NOT EXISTS user_llm_pref (
+                  user_id       TEXT PRIMARY KEY,
+                  last_provider TEXT NOT NULL DEFAULT '',
+                  updated_at    TEXT NOT NULL,
+                  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                )"""
+            )
+
             # Skill 设备令牌表（机器绑定，不可跨机迁移）
             conn.execute(
                 """CREATE TABLE IF NOT EXISTS device_tokens (
@@ -833,6 +858,98 @@ class AuthService:
                 (user_id, label),
             )
         return cur.rowcount > 0
+
+
+    # ── 用户级 LLM 凭据 ────────────────────────────────────────────────────────
+
+    def get_user_llm_config(self, user_id: str) -> dict[str, dict[str, str]]:
+        """返回 {provider: {api_key, model_name, base_url}}（api_key 已解密）。
+
+        无 user_id 或无记录返回 {}。解密失败的条目跳过（不让坏数据拖垮整个路由）。
+        """
+        if not user_id:
+            return {}
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT provider, api_key, model_name, base_url FROM user_llm_config WHERE user_id=?",
+                (user_id,),
+            ).fetchall()
+        result: dict[str, dict[str, str]] = {}
+        for row in rows:
+            enc = row["api_key"] or ""
+            try:
+                api_key = self._fernet.decrypt(enc.encode("ascii")).decode("utf-8") if enc else ""
+            except Exception:
+                # 加密损坏/密钥轮换：跳过该条，避免污染路由
+                continue
+            result[row["provider"]] = {
+                "api_key": api_key,
+                "model_name": row["model_name"] or "",
+                "base_url": row["base_url"] or "",
+            }
+        return result
+
+    def set_user_llm_provider(
+        self,
+        user_id: str,
+        provider: str,
+        api_key: str = "",
+        model_name: str = "",
+        base_url: str = "",
+    ) -> None:
+        """UPSERT 用户对某 provider 的凭据。api_key 加密存储。"""
+        if not user_id:
+            raise ValueError("user_id is required")
+        provider = (provider or "").strip()
+        if not provider:
+            raise ValueError("provider is required")
+        api_key = api_key or ""
+        encrypted_api_key = (
+            self._fernet.encrypt(api_key.encode("utf-8")).decode("ascii") if api_key else ""
+        )
+        now = _isoformat()
+        with self._connect() as conn:
+            conn.execute(
+                """INSERT INTO user_llm_config (user_id, provider, api_key, model_name, base_url, updated_at)
+                   VALUES (?,?,?,?,?,?)
+                   ON CONFLICT(user_id, provider) DO UPDATE SET
+                     api_key=excluded.api_key,
+                     model_name=excluded.model_name,
+                     base_url=excluded.base_url,
+                     updated_at=excluded.updated_at""",
+                (user_id, provider, encrypted_api_key, model_name or "", base_url or "", now),
+            )
+
+    def delete_user_llm_provider(self, user_id: str, provider: str) -> None:
+        with self._connect() as conn:
+            conn.execute(
+                "DELETE FROM user_llm_config WHERE user_id=? AND provider=?",
+                (user_id, provider),
+            )
+
+    def get_user_last_provider(self, user_id: str) -> str:
+        if not user_id:
+            return ""
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT last_provider FROM user_llm_pref WHERE user_id=?",
+                (user_id,),
+            ).fetchone()
+        return (row["last_provider"] if row else "") or ""
+
+    def set_user_last_provider(self, user_id: str, provider: str) -> None:
+        if not user_id:
+            raise ValueError("user_id is required")
+        now = _isoformat()
+        with self._connect() as conn:
+            conn.execute(
+                """INSERT INTO user_llm_pref (user_id, last_provider, updated_at)
+                   VALUES (?,?,?)
+                   ON CONFLICT(user_id) DO UPDATE SET
+                     last_provider=excluded.last_provider,
+                     updated_at=excluded.updated_at""",
+                (user_id, provider or "", now),
+            )
 
 
     # ── Device Token 方法 ──────────────────────────────────────────────────────

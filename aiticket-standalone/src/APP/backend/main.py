@@ -26,7 +26,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from pydantic import BaseModel, Field, validator
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Union
 try:
     from analysis import TicketAnalyzer
     _TICKET_ANALYZER_AVAILABLE = True
@@ -4174,6 +4174,23 @@ def generate_reply(request: GenerateReplyRequest, raw_request: Request, _quota=D
             "auto_dispatch": _dispatch_info,
             "reply_gateway": result.get("reply_gateway"),
         }
+    except RuntimeError as e:
+        # 用户级 LLM 强制但当前用户未配置凭据 → 结构化阻断（非 500）
+        _msg = str(e)
+        if _msg.startswith("LLM_BLOCKED:"):
+            _parts = _msg.split(":", 2)
+            _blocked_feature = _parts[1] if len(_parts) > 1 else "smart_reply"
+            return {
+                "status": "llm_blocked",
+                "issue_key": request.issue_key,
+                "blocked_feature": _blocked_feature,
+                "reply_content": "",
+                "solution_content": "",
+                "ai_analysis": None,
+                "message": "该功能需配置你的个人 LLM 凭据后才能使用，请前往「设置 → LLM 配置」填写对应 provider 的 API Key。",
+                "reason": "feature_requires_user_llm",
+            }
+        raise HTTPException(status_code=500, detail=_msg)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -5892,6 +5909,7 @@ def resolve_default_llm_runtime() -> Dict[str, str]:
 
 
 LLM_FEATURE_ROUTING_KEY = "llm_feature_routing"
+LLM_FEATURE_FALLBACK_KEY = "llm_feature_fallback"
 
 SYSTEM_LLM_FEATURES = [
     {"id": "req_analysis", "name": "需求分析"},
@@ -5903,42 +5921,124 @@ SYSTEM_LLM_FEATURES = [
     {"id": "reply_confidence_scoring", "name": "置信度评分"},
 ]
 
+# 逐功能"允许系统兜底"缺省表：
+#   用户面功能默认 False —— 强制用户级凭据（用户没配则阻断，不偷用 admin 的 key）。
+#   纯后台功能默认 True —— 无 user 上下文，只能走系统级。
+#   未在表中的 feature 缺省 True（保守：不阻断未知后台流程）。
+_FEATURE_FALLBACK_DEFAULTS = {
+    # ── 用户面（默认 False，强制用户级）──
+    "smart_reply": False,
+    "reply_supervisor": False,
+    "reply_confidence_scoring": False,
+    "classification": False,
+    "confidence_scoring": False,
+    "solution_recommendation": False,
+    "reply_style_router": False,
+    "domain_module_router": False,
+    # ── 纯后台（默认 True，系统级）──
+    "darwin_eval": True,
+    "req_analysis": True,
+    "spec_gen": True,
+    "competitive": True,
+    "weekly_report": True,
+}
 
-def resolve_feature_llm_runtime(feature: str, *, exclude_providers: list = None) -> Dict[str, str]:
-    """系统级功能的 LLM 路由：按 feature 查找指定 provider，支持 list 降级链。"""
+
+def get_feature_fallback_map() -> Dict[str, bool]:
+    """合并 admin 配置 + 缺省表，返回 {feature: allow_system_fallback}。
+
+    admin 在 system_settings[LLM_FEATURE_FALLBACK_KEY] 里的覆盖优先于缺省表。
+
+    compactskill 单机模式（AITICKET_LOCAL_MODE）：单机运行无系统级/用户级之分，
+    全局配置对所有功能直接生效 → 兜底全开，跳过缺省表的用户面强制项。
+    """
+    if os.environ.get("AITICKET_LOCAL_MODE", "").strip().lower() in ("1", "true", "yes"):
+        return {f["id"]: True for f in SYSTEM_LLM_FEATURES}
+    override = auth_service.get_system_setting(LLM_FEATURE_FALLBACK_KEY) or {}
+    merged = dict(_FEATURE_FALLBACK_DEFAULTS)
+    if isinstance(override, dict):
+        for k, v in override.items():
+            merged[k] = bool(v)
+    return merged
+
+
+def resolve_feature_llm_runtime(
+    feature: str,
+    *,
+    exclude_providers: list = None,
+    user_id: str = None,
+) -> Dict[str, str]:
+    """功能级 LLM 路由：provider 选择走系统路由（list 降级链），凭据优先用户级。
+
+    凭据解析顺序（对每个候选 provider）：
+      1. 用户级：user_id 非空且该用户配了此 provider(有 api_key) → 返回 (_source="user")
+      2. 系统级：该 feature "允许系统兜底"为 True → 用 admin 配置 (_source="system")
+      3. 全部落空 → 返回 _blocked 标记 (_source="blocked")，由上层决定阻断/跳过。
+    """
     routing = auth_service.get_system_setting(LLM_FEATURE_ROUTING_KEY) or {}
     val = routing.get(feature) or routing.get("_default") or ""
     providers = val if isinstance(val, list) else ([val] if val else [])
 
     skip = set(exclude_providers or [])
-    config = load_llm_config()
+    candidate_providers = [p for p in providers if p not in skip]
 
-    for provider_name in providers:
-        if provider_name in skip:
-            continue
-        provider_config = config.get(provider_name, {})
-        if provider_config.get("api_key"):
+    # ── 1. 用户级优先：按路由顺序查当前用户对候选 provider 的凭据 ──
+    user_cfg = auth_service.get_user_llm_config(user_id) if user_id else {}
+    for provider_name in candidate_providers:
+        pc = user_cfg.get(provider_name) or {}
+        if pc.get("api_key"):
             return {
                 "provider": provider_name,
-                "api_key": provider_config["api_key"],
-                "model_name": provider_config.get("model_name", ""),
-                "base_url": provider_config.get("base_url", ""),
+                "api_key": pc["api_key"],
+                "model_name": pc.get("model_name", ""),
+                "base_url": pc.get("base_url", ""),
+                "_source": "user",
             }
 
-    return resolve_default_llm_runtime()
+    # ── 2. 系统兜底：仅当该 feature 允许 ──
+    allow_fallback = get_feature_fallback_map().get(feature, True)
+    if allow_fallback:
+        config = load_llm_config()
+        for provider_name in candidate_providers:
+            provider_config = config.get(provider_name, {})
+            if provider_config.get("api_key"):
+                return {
+                    "provider": provider_name,
+                    "api_key": provider_config["api_key"],
+                    "model_name": provider_config.get("model_name", ""),
+                    "base_url": provider_config.get("base_url", ""),
+                    "_source": "system",
+                }
+        # 路由链全空时回退到系统全局默认（保持原系统级语义）
+        default_rt = resolve_default_llm_runtime()
+        if default_rt.get("api_key"):
+            default_rt["_source"] = "system"
+            return default_rt
+
+    # ── 3. 阻断：用户没配 + 不许兜底（或兜底也没 key）──
+    return {
+        "provider": candidate_providers[0] if candidate_providers else "none",
+        "api_key": "",
+        "model_name": "",
+        "base_url": "",
+        "_blocked": True,
+        "_source": "blocked",
+        "_reason": "feature_requires_user_llm",
+    }
 
 
 def resolve_effective_llm_runtime(
     *,
+    user_id: str = "",
     feature: str = "",
     provider: str = "",
     api_key: str = "",
     model_name: str = "",
     base_url: str = "",
 ) -> Dict[str, str]:
-    # 无显式 api_key 时：优先走功能路由，无 feature 则走全局默认
+    # 无显式 api_key 时：优先走功能路由（带 user_id），无 feature 则走全局默认
     if not api_key and feature:
-        defaults = resolve_feature_llm_runtime(feature)
+        defaults = resolve_feature_llm_runtime(feature, user_id=user_id or None)
     else:
         defaults = resolve_default_llm_runtime()
     effective_api_key = api_key or defaults["api_key"]
@@ -5946,23 +6046,35 @@ def resolve_effective_llm_runtime(
     effective_model_name = model_name or defaults["model_name"]
     effective_base_url = base_url or defaults["base_url"]
     if not effective_api_key:
-        return {
+        out = {
             "provider": effective_provider or "none",
             "api_key": "",
             "model_name": effective_model_name,
             "base_url": effective_base_url,
         }
+        # 透传功能路由的阻断标记（用户级强制但未配凭据），供端点转结构化提示
+        if defaults.get("_blocked"):
+            out["_blocked"] = True
+            out["_source"] = "blocked"
+            out["_reason"] = defaults.get("_reason", "feature_requires_user_llm")
+        return out
     return {
         "provider": effective_provider or defaults["provider"] or "none",
         "api_key": effective_api_key,
         "model_name": effective_model_name,
         "base_url": effective_base_url,
+        "_source": defaults.get("_source", "system"),
     }
 
 @app.get("/api/config/llm")
-def get_llm_config_endpoint():
-    """Get LLM configuration (read-only, no auth)"""
-    return load_llm_config()
+def get_llm_config_endpoint(request: Request):
+    """获取当前用户的 LLM 凭据配置（用户级，不含系统级 key）"""
+    user = require_authenticated_user(request)
+    uid = user["id"]
+    return {
+        "providers": auth_service.get_user_llm_config(uid),
+        "last_provider": auth_service.get_user_last_provider(uid),
+    }
 
 class LLMConfigRequest(BaseModel):
     provider: str
@@ -5971,67 +6083,130 @@ class LLMConfigRequest(BaseModel):
     base_url: str = ""
 
 @app.post("/api/config/llm")
-def set_llm_config(request: LLMConfigRequest):
-    """Set LLM configuration for board AI analysis (no auth, personal tool)"""
+def set_llm_config(request: LLMConfigRequest, raw_request: Request):
+    """保存当前用户的 LLM 凭据（用户级，不写系统级）"""
+    user = require_authenticated_user(raw_request)
+    uid = user["id"]
+    auth_service.set_user_llm_provider(
+        uid,
+        provider=request.provider,
+        api_key=request.api_key,
+        model_name=request.model_name,
+        base_url=request.base_url,
+    )
+    auth_service.set_user_last_provider(uid, request.provider)
+    return {"status": "success", "provider": request.provider}
+
+
+class LLMProviderDeleteRequest(BaseModel):
+    provider: str
+
+
+@app.delete("/api/config/llm/{provider}")
+def delete_llm_provider(provider: str, raw_request: Request):
+    """删除当前用户对某 provider 的凭据"""
+    user = require_authenticated_user(raw_request)
+    auth_service.delete_user_llm_provider(user["id"], provider)
+    return {"status": "success", "provider": provider}
+
+
+# ── 系统级 LLM 配置（admin 专属，原全局逻辑迁移至此）────────────────────────
+@app.get("/api/config/llm/system")
+def get_system_llm_config(request: Request):
+    """获取系统级 LLM 配置（仅管理员，admin 维护，作为允许兜底功能的凭据来源）"""
+    require_admin_user(request)
+    return load_llm_config()
+
+
+@app.post("/api/config/llm/system")
+def set_system_llm_config(request: LLMConfigRequest, raw_request: Request):
+    """设置系统级 LLM 配置（仅管理员）"""
+    admin = require_admin_user(raw_request)
     config = load_llm_config()
     config[request.provider] = {
         "api_key": request.api_key,
         "model_name": request.model_name,
-        "base_url": request.base_url
+        "base_url": request.base_url,
     }
     config["last_provider"] = request.provider
-    save_llm_config(config)
-
-    # 更新BoardService的LLM配置
+    save_llm_config(config, updated_by=admin["username"])
+    # 同步 BoardService 的系统级回退配置
     board_service.update_llm_config(
         provider=request.provider,
         api_key=request.api_key,
         model_name=request.model_name,
-        base_url=request.base_url
+        base_url=request.base_url,
     )
-
     return {"status": "success", "provider": request.provider}
 
 
 @app.get("/api/config/llm/features")
-def get_feature_routing():
-    """获取功能级 LLM 路由配置"""
+def get_feature_routing(request: Request):
+    """获取功能级 LLM 路由配置 + 各功能"允许系统兜底"开关（需登录）"""
+    require_authenticated_user(request)
     routing = auth_service.get_system_setting(LLM_FEATURE_ROUTING_KEY) or {}
     config = load_llm_config()
     available_providers = [k for k in config if k != "last_provider"]
     return {
         "routing": routing,
+        "fallback": get_feature_fallback_map(),
         "features": SYSTEM_LLM_FEATURES,
         "available_providers": available_providers,
     }
 
 
 class FeatureRoutingRequest(BaseModel):
-    routing: Dict[str, str] = {}
+    # 值支持单 provider 字符串或降级链 list（如 ["zhipu","local"]）——
+    # 单点路由在 provider 限流时会导致功能全崩，list 形式让运行时沿链 failover。
+    routing: Dict[str, Union[str, List[str]]] = {}
+    # 可选：逐功能"允许系统兜底"开关（admin 控）。仅传入键被覆盖。
+    fallback: Optional[Dict[str, bool]] = None
 
 
 @app.post("/api/config/llm/features")
 def set_feature_routing(body: FeatureRoutingRequest, request: Request):
-    """设置功能级 LLM 路由（需管理员）"""
+    """设置功能级 LLM 路由 + 兜底开关（需管理员）"""
     admin = require_admin_user(request)
     auth_service.set_system_setting(LLM_FEATURE_ROUTING_KEY, body.routing, updated_by=admin["username"])
     routing_file = os.path.join(os.path.dirname(__file__), "llm_feature_routing.json")
     with open(routing_file, "w", encoding="utf-8") as f:
         json.dump(body.routing, f, ensure_ascii=False, indent=2)
+    if body.fallback is not None:
+        # 合并到现有覆盖（仅传入键生效，未传保持原值）
+        existing = auth_service.get_system_setting(LLM_FEATURE_FALLBACK_KEY) or {}
+        if not isinstance(existing, dict):
+            existing = {}
+        for k, v in body.fallback.items():
+            existing[k] = bool(v)
+        auth_service.set_system_setting(LLM_FEATURE_FALLBACK_KEY, existing, updated_by=admin["username"])
     return {"status": "success"}
 
 
 class LLMTestRequest(BaseModel):
     provider: str
-    api_key: str
+    api_key: str = ""
     model_name: str = ""
     base_url: str = ""
 
 
 @app.post("/api/llm/test")
-def test_llm_connection(request: LLMTestRequest):
-    """测试LLM API连接是否可用"""
+def test_llm_connection(request: LLMTestRequest, raw_request: Request):
+    """测试LLM API连接是否可用。
+
+    显式传 api_key 时直接用之；否则按当前登录用户的用户级凭据测试（require_authenticated_user）。
+    """
     try:
+        if not request.api_key:
+            # 无显式 key：取当前用户对该 provider 的用户级凭据
+            user = require_authenticated_user(raw_request)
+            user_cfg = auth_service.get_user_llm_config(user["id"]).get(request.provider) or {}
+            if user_cfg.get("api_key"):
+                request = LLMTestRequest(
+                    provider=request.provider,
+                    api_key=user_cfg.get("api_key", ""),
+                    model_name=request.model_name or user_cfg.get("model_name", ""),
+                    base_url=request.base_url or user_cfg.get("base_url", ""),
+                )
         if not request.api_key:
             return {"status": "error", "message": "API Key 不能为空"}
 

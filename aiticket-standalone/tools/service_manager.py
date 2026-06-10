@@ -36,6 +36,8 @@ def uvicorn_args(home: Path, port: int) -> list[str]:
         "--host", P.DEFAULT_HOST,
         "--port", str(port),
         "--workers", "1",
+        "--limit-concurrency", "64",
+        "--timeout-keep-alive", "5",
     ]
 
 

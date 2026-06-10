@@ -311,20 +311,37 @@ class AIAnalysisWorker:
         
         return None
     
-    def _resolve_routed_llm_config(self, feature_key: str) -> dict:
-        """按功能路由解析 LLM 配置，resolve 失败时回退到 self.llm_config"""
+    def _resolve_routed_llm_config(self, feature_key: str, user_id: str = None) -> dict:
+        """按功能路由解析 LLM 配置（凭据优先用户级），resolve 失败时回退 self.llm_config。
+
+        若路由返回 _blocked（用户级强制但未配凭据），原样返回该 dict（含 _blocked），
+        由调用方决定阻断（A 类有 user）或跳过（B 类后台 user_id=None）。
+        """
         try:
             from main import resolve_feature_llm_runtime
-            cfg = resolve_feature_llm_runtime(feature_key)
+            cfg = resolve_feature_llm_runtime(feature_key, user_id=user_id or None)
+            if cfg and cfg.get("_blocked"):
+                return cfg
             if cfg and cfg.get("api_key"):
                 return cfg
         except Exception as e:
             print(f"[AIWorker] 功能路由解析失败 {feature_key}: {e}")
         return self.llm_config
 
-    def _call_llm_with_feature(self, feature_key: str, prompt: str) -> str:
-        """按功能路由调用 LLM，返回响应文本；LLM 返回错误时抛出 RuntimeError"""
-        cfg = self._resolve_routed_llm_config(feature_key)
+    def _call_llm_with_feature(self, feature_key: str, prompt: str, user_id: str = None) -> str:
+        """按功能路由调用 LLM，返回响应文本；LLM 返回错误时抛出 RuntimeError。
+
+        _blocked：B 类（user_id=None，后台）跳过该步并打日志，返回空串不崩；
+                  A 类（有 user_id）抛 RuntimeError，由上层转结构化提示/4xx。
+        """
+        cfg = self._resolve_routed_llm_config(feature_key, user_id=user_id)
+        if cfg.get("_blocked"):
+            if user_id:
+                raise RuntimeError(
+                    f"LLM_BLOCKED:{feature_key}:feature_requires_user_llm"
+                )
+            print(f"[AIWorker] feature={feature_key} 系统兜底关闭且无用户凭据，跳过 LLM 步骤")
+            return ""
         response = self.llm_service.call_llm(
             prompt,
             api_key=cfg.get("api_key", ""),
@@ -336,14 +353,18 @@ class AIAnalysisWorker:
             raise RuntimeError(response)
         return response
 
-    def _batch_llm_analyze(self, issues: List[JiraIssue]):
-        """多字段并发生成：5 字段各自走功能路由，失败 >= 3 个时降级到原单 prompt 实现"""
+    def _batch_llm_analyze(self, issues: List[JiraIssue], user_id: str = None):
+        """多字段并发生成：5 字段各自走功能路由，失败 >= 3 个时降级到原单 prompt 实现。
+
+        user_id 透传到各 feature 调用（凭据优先用户级）。后台 AI worker 无 user → None，
+        受各 feature "允许系统兜底"开关约束（关则该字段跳过/降级，不崩）。
+        """
         import concurrent.futures
 
         def _gen_field(feature_key: str, prompt: str):
             """单字段调用，返回 (feature_key, result_or_None)"""
             try:
-                result = self._call_llm_with_feature(feature_key, prompt)
+                result = self._call_llm_with_feature(feature_key, prompt, user_id=user_id)
                 return feature_key, result
             except Exception as e:
                 print(f"[AIWorker] 字段 {feature_key} 生成失败: {e}")
@@ -394,8 +415,8 @@ class AIAnalysisWorker:
                     time.sleep(self.min_interval - elapsed)
                 self.last_api_call = time.time()
 
-                batch_response = self._call_llm_with_feature("classification_analysis", batch_prompt)
-                model_name = self._resolve_routed_llm_config("classification_analysis").get("model_name", "glm-5")
+                batch_response = self._call_llm_with_feature("classification_analysis", batch_prompt, user_id=user_id)
+                model_name = self._resolve_routed_llm_config("classification_analysis", user_id=user_id).get("model_name", "glm-5")
                 base_results = self._parse_batch_response(batch_response, [issue.key], model_name)
                 analysis = base_results.get(issue.key) or self._rule_based_analysis(issue)
             except Exception as e:
@@ -3492,10 +3513,36 @@ class BoardService:
 
         # 调用 LLM（按 feature routing 降级链逐个尝试）
         full_prompt = f"{system_prompt}\n\n{user_prompt}"
+        # smart_reply 是用户面功能：凭据优先用户级。先尝试 user-level 路由解析；
+        # _blocked（用户级强制但未配）→ 抛 RuntimeError 由上层端点转结构化提示。
         chain = self._resolve_feature_chain("smart_reply")
+        try:
+            from main import resolve_feature_llm_runtime as _rfr
+            _routed = _rfr("smart_reply", user_id=user_id or None)
+        except Exception as _e_routed:
+            _routed = None
+        if _routed is not None and _routed.get("_blocked") and user_id:
+            raise RuntimeError("LLM_BLOCKED:smart_reply:feature_requires_user_llm")
+        # user-level 命中：把该 provider 置于链首，凭据用用户级
+        _user_routed_cfg = None
+        if _routed is not None and _routed.get("_source") == "user" and _routed.get("api_key"):
+            _user_routed_cfg = _routed
+            _rp = _routed.get("provider")
+            if _rp and _rp in chain:
+                chain = [_rp] + [c for c in chain if c != _rp]
+            elif _rp:
+                chain = [_rp] + chain
         last_err = ""
         for provider_name in chain:
-            p_cfg = self._load_provider_config(provider_name)
+            # 用户级命中的 provider 用用户凭据，其余仍读系统级 provider config
+            if _user_routed_cfg is not None and provider_name == _user_routed_cfg.get("provider"):
+                p_cfg = {
+                    "api_key": _user_routed_cfg.get("api_key", ""),
+                    "model_name": _user_routed_cfg.get("model_name", "") or self._get_default_model(provider_name),
+                    "base_url": _user_routed_cfg.get("base_url", ""),
+                }
+            else:
+                p_cfg = self._load_provider_config(provider_name)
             if not p_cfg.get("api_key"):
                 continue
             try:

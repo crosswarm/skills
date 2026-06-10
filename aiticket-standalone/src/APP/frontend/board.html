@@ -4252,10 +4252,9 @@
             }
         }
 
-        // 页面加载时同步localStorage配置到后端
-        document.addEventListener('DOMContentLoaded', async () => {
-            await syncLLMConfigToBackend();
-        });
+        // [用户级 LLM] localStorage 仅作本地缓存，真相源是后端 per-user 配置。
+        // 不再在页面加载时把本地凭据自动 POST 回服务端（避免覆盖/污染用户级配置）；
+        // 个人 LLM 配置的读写统一走设置面板的认证端点（GET/POST/DELETE /api/config/llm）。
 
         // ========== Board Settings Modal Functions ==========
         let tempColumns = [];
@@ -7342,6 +7341,30 @@ ${_colDecision(byKey)}
             loadFieldOptions(issueKey);
         }
 
+        // LLM 未配置引导：提示用户去设置里配置个人 LLM 凭据，并提供入口
+        function promptLLMConfig(message) {
+            const msg = message || '请先在设置里配置你的个人 LLM 凭据后再生成回复。';
+            if (typeof showToast === 'function') showToast(msg, 'warning', 6000);
+            // 在回复弹窗内插入一个可点击的引导条（含打开设置入口）
+            const anchor = document.getElementById('re-solution');
+            if (anchor && anchor.parentElement) {
+                let banner = document.getElementById('re-llm-blocked-banner');
+                if (!banner) {
+                    banner = document.createElement('div');
+                    banner.id = 're-llm-blocked-banner';
+                    banner.className = 'mt-2 mb-2 px-3 py-2 rounded-lg text-sm flex items-center justify-between gap-3';
+                    banner.style.cssText = 'background:var(--ds-warning-subtle,#fef3c7);color:var(--ds-warning-text,#92400e);border:1px solid var(--ds-warning,#f59e0b);';
+                    anchor.parentElement.insertBefore(banner, anchor);
+                }
+                banner.innerHTML =
+                    '<span>' + (msg) + '</span>' +
+                    '<button type="button" onclick="(window.DSLLMConfig&&DSLLMConfig.open());document.getElementById(\'re-llm-blocked-banner\')?.remove();" ' +
+                    'class="px-3 py-1 rounded-md text-white text-xs font-medium whitespace-nowrap" style="background:#d97706;">打开设置</button>';
+            } else if (window.DSLLMConfig) {
+                // 兜底：无锚点时直接给出打开设置的能力（toast 已提示）
+            }
+        }
+
         // 生成智能回复
         async function generateSmartReply(issueKey, force = false) {
             // ── 竞态防护 ─────────────────────────────────────────────
@@ -7376,7 +7399,17 @@ ${_colDecision(byKey)}
                     return;
                 }
 
-                // Gate 1 blocked
+                // LLM 未配置/不允许系统兜底：引导用户去设置里配置个人 LLM
+                if (data.status === 'llm_blocked') {
+                    document.getElementById('re-gate1-banner')?.classList.add('hidden');
+                    document.getElementById('re-gen-details')?.classList.add('hidden');
+                    document.getElementById('re-solution').value = '';
+                    document.getElementById('re-solution').placeholder = data.message || '该功能需要你配置个人 LLM 凭据后才能生成回复。';
+                    promptLLMConfig(data.message);
+                    return;
+                }
+
+                // Gate blocked (completeness / classification / specificity)
                 if (data.status === 'gate_blocked') {
                     const banner = document.getElementById('re-gate1-banner');
                     const missingList = document.getElementById('re-gate1-missing-list');
@@ -7396,6 +7429,7 @@ ${_colDecision(byKey)}
                 const replyText = data.solution_content || data.reply_content || '';
                 if (data.status === 'success' && replyText) {
                     document.getElementById('re-gate1-banner')?.classList.add('hidden');
+                    document.getElementById('re-llm-blocked-banner')?.remove();
                     originalReplyContent = replyText;
                     document.getElementById('re-solution').value = originalReplyContent;
                     updateWordCount(data.word_count || 0);
@@ -7822,6 +7856,12 @@ ${_colDecision(byKey)}
                     body: JSON.stringify({ issue_key: issueKey, force: true, force_pass_gate1: true })
                 });
                 const data = await response.json();
+                if (data.status === 'llm_blocked') {
+                    document.getElementById('re-solution').value = '';
+                    document.getElementById('re-solution').placeholder = data.message || '该功能需要你配置个人 LLM 凭据后才能生成回复。';
+                    promptLLMConfig(data.message);
+                    return;
+                }
                 const replyText = data.solution_content || data.reply_content || '';
                 if (data.status === 'success' && replyText) {
                     gate1BlockedKeys.delete(issueKey);
