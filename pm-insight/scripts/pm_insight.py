@@ -24,7 +24,7 @@ import os
 import sys
 import time
 import unicodedata
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -488,9 +488,13 @@ def fetch_demand_detail(cfg: Dict[str, Any], aid: str) -> Dict[str, Any]:
     return flat
 
 
-def execute_hang(cfg: Dict[str, Any], aid: str, comment: str = "") -> Dict[str, Any]:
+def execute_hang(cfg: Dict[str, Any], aid: str, comment: str = "",
+                 current_status: str = "WAIT_ANALYSIS",
+                 entity_type: str = "ORIGINAL_DEMAND") -> Dict[str, Any]:
     """
     POST /rest/v1/workflow/processConvert — hang (暂缓) a demand.
+    current_status 必须是需求的实际当前状态码 (WAIT_ANALYSIS/ASSIGNING/DEVING…)，
+    PM 工作流引擎按状态机校验，传错会被拒。默认 WAIT_ANALYSIS 仅为向后兼容。
     Returns {"success": True/False, "message": "..."}.
     """
     line_id = cfg.get("line_id", "1906301517140860973")
@@ -498,9 +502,9 @@ def execute_hang(cfg: Dict[str, Any], aid: str, comment: str = "") -> Dict[str, 
     # All workflow params go in query string; only fieldData in body
     params = {
         "lineId": line_id,
-        "entityType": "ORIGINAL_DEMAND",
+        "entityType": entity_type,
         "operation": "WAIT_PROCESS",
-        "currentStatus": "WAIT_ANALYSIS",
+        "currentStatus": current_status,
         "tenant_info": tenant,
     }
     body = {"fieldData": {"aids": [aid]}}
@@ -944,24 +948,16 @@ def _resolve_product_filter(cfg: Dict[str, Any], product_name: str) -> Optional[
     return None
 
 
-def cmd_list(
+def _build_list_conditions(
     cfg: Dict[str, Any],
-    fmt: str,
     status: Optional[str] = None,
     product: Optional[str] = None,
     assignee: Optional[str] = None,
-    fetch_all: bool = False,
-    top_n: Optional[int] = None,
-    max_results: int = 50,
     entity: str = "original",
-) -> Optional[str]:
-    """List demands with optional filters."""
-    if entity == "verification":
-        return _cmd_list_verification(cfg, fmt, fetch_all, top_n, max_results)
-
+) -> List[Dict]:
+    """构造 page API 的筛选 conditions (status/product/assignee)。cmd_list 与 cmd_hang 共用。"""
     ecfg = ENTITY_CONFIG.get(entity, ENTITY_CONFIG["original"])
     conditions: List[Dict] = []
-
     # Status filter
     if status:
         sc = _resolve_status_filter(status, entity)
@@ -973,42 +969,96 @@ def cmd_list(
             "valueType": "STRING", "editType": "LIST",
             "values": ecfg["default_statuses"],
         })
-
     # Product filter
     if product:
         pf = _resolve_product_filter(cfg, product)
         if pf:
             conditions.append(pf)
-
     # Assignee/analyst filter (default to config's default_analyst; "all" skips)
-    # Defect uses selfOnly=true instead of assignee condition
     effective_assignee = assignee or cfg.get("default_analyst", "")
-    if entity != "defect" and effective_assignee and effective_assignee.lower() != "all":
+    if entity != "defect" and effective_assignee and str(effective_assignee).lower() != "all":
         field = "analyst" if entity == "demand" else "assignee"
         conditions.append({
             "fieldCode": field, "operation": "eq",
             "valueType": "STRING", "values": [effective_assignee],
         })
+    return conditions
 
+
+def _fetch_all_demands(
+    cfg: Dict[str, Any],
+    conditions: List[Dict],
+    entity: str = "original",
+    fetch_all: bool = True,
+    max_results: int = 50,
+    assignee: Optional[str] = None,
+) -> Optional[List[Dict]]:
+    """翻页拉取所有匹配 conditions 的需求。
+    PM page API 单页上限=50，请求更大会被静默截断 → 据此 clamp；翻页终止用 total 判断
+    （旧实现用 len(records)<page_size 判末页，当 page_size>50 时首页即误判 → 漏数据）。"""
     all_records: List[Dict] = []
     page = 1
-    page_size = max_results
-
+    page_size = max(1, min(max_results, 50))
     while True:
         print(f"  获取第 {page} 页...", file=sys.stderr)
-        _self_only = False if (entity == "defect" and assignee and assignee.lower() == "all") else None
+        _self_only = False if (entity == "defect" and assignee and str(assignee).lower() == "all") else None
         result = fetch_demands_page(cfg, page=page, page_size=page_size, conditions=conditions, entity=entity, self_only=_self_only)
         if "error" in result:
             print(f"[ERROR] {result['error']}", file=sys.stderr)
             return None
-
         records = result.get("records", [])
         total = result.get("total", 0)
         all_records.extend(records)
-
-        if not fetch_all or len(all_records) >= total or len(records) < page_size:
+        # 终止: 非全量 / 已取满 total / 空页(防死循环)
+        if not fetch_all or len(all_records) >= total or not records:
             break
         page += 1
+    return all_records
+
+
+def _filter_by_ctime(
+    records: List[Dict],
+    within_days: Optional[int] = None,
+    after_date: Optional[str] = None,
+) -> List[Dict]:
+    """按创建时间 ctime(毫秒) 过滤。within_days=最近N天；after_date=YYYY-MM-DD(含当天起)。"""
+    if not within_days and not after_date:
+        return records
+    cutoff_ms = 0
+    if within_days:
+        cutoff_ms = int((datetime.now() - timedelta(days=within_days)).timestamp() * 1000)
+    if after_date:
+        d = datetime.strptime(after_date, "%Y-%m-%d")
+        ms = int(d.timestamp() * 1000)
+        cutoff_ms = max(cutoff_ms, ms) if within_days else ms
+    return [r for r in records if (r.get("ctime") or 0) >= cutoff_ms]
+
+
+def cmd_list(
+    cfg: Dict[str, Any],
+    fmt: str,
+    status: Optional[str] = None,
+    product: Optional[str] = None,
+    assignee: Optional[str] = None,
+    fetch_all: bool = False,
+    top_n: Optional[int] = None,
+    max_results: int = 50,
+    entity: str = "original",
+    within_days: Optional[int] = None,
+    after_date: Optional[str] = None,
+) -> Optional[str]:
+    """List demands with optional filters."""
+    if entity == "verification":
+        return _cmd_list_verification(cfg, fmt, fetch_all, top_n, max_results)
+
+    conditions = _build_list_conditions(cfg, status=status, product=product, assignee=assignee, entity=entity)
+
+    all_records = _fetch_all_demands(cfg, conditions, entity=entity, fetch_all=fetch_all,
+                                     max_results=max_results, assignee=assignee)
+    if all_records is None:
+        return None
+
+    all_records = _filter_by_ctime(all_records, within_days=within_days, after_date=after_date)
 
     # Apply top limit
     if top_n and top_n > 0:
@@ -1091,6 +1141,98 @@ def cmd_detail(cfg: Dict[str, Any], aid: str, fmt: str) -> Optional[str]:
             lines.append(f"    {k}: {v}")
 
     return "\n".join(lines)
+
+
+def cmd_hang(
+    cfg: Dict[str, Any],
+    status: Optional[str] = None,
+    product: Optional[str] = None,
+    assignee: Optional[str] = None,
+    entity: str = "original",
+    within_days: Optional[int] = None,
+    after_date: Optional[str] = None,
+    dry_run: bool = False,
+    auto_confirm: bool = False,
+    fmt: str = "json",
+) -> Optional[str]:
+    """
+    基于实时列表筛选的批量暂缓（不依赖评分缓存）。
+    复用 --list 的 status/product/assignee 筛选 + 创建时间窗口（within_days/after_date），
+    对结果逐条 processConvert → WAIT_PROCESS，每条按其实际当前状态传 currentStatus。
+    """
+    if entity not in ("original", "demand"):
+        print(f"[ERROR] --hang 仅支持 original/demand，不支持 {entity}", file=sys.stderr)
+        return None
+    conditions = _build_list_conditions(cfg, status=status, product=product, assignee=assignee, entity=entity)
+    records = _fetch_all_demands(cfg, conditions, entity=entity, fetch_all=True, assignee=assignee)
+    if records is None:
+        return None
+    records = _filter_by_ctime(records, within_days=within_days, after_date=after_date)
+
+    # 仅暂缓活跃状态（终态/已暂缓跳过）——暂缓 operation 的状态机入口
+    HANGABLE = {"WAIT_ANALYSIS", "ASSIGNING", "DEVING"}
+    targets = [r for r in records if (r.get("status_raw") or "WAIT_ANALYSIS") in HANGABLE]
+    skipped = len(records) - len(targets)
+    if not targets:
+        msg = "没有符合条件的可暂缓需求。"
+        print(msg, file=sys.stderr)
+        return format_json_output({"total": 0, "targets": 0, "skipped": skipped}) if fmt == "json" else msg
+
+    targets.sort(key=lambda x: x.get("ctime") or 0, reverse=True)
+    print(f"\n将暂缓 {len(targets)} 条需求"
+          + (f"（跳过 {skipped} 条非活跃状态）" if skipped else "") + ":\n", file=sys.stderr)
+    for r in targets[:30]:
+        print(f"  [{r.get('code')}] {r.get('ctime_title','')} {r.get('status_title','')} | {(r.get('title') or '')[:36]}", file=sys.stderr)
+    if len(targets) > 30:
+        print(f"  ... 及其余 {len(targets) - 30} 条", file=sys.stderr)
+
+    entity_type = "DEMAND" if entity == "demand" else "ORIGINAL_DEMAND"
+
+    if dry_run:
+        print("\n[DRY-RUN] 仅预览，未执行暂缓。去掉 --dry-run 即执行。", file=sys.stderr)
+        payload = {
+            "dry_run": True, "total": len(targets), "skipped": skipped,
+            "targets": [{"code": r.get("code"), "aid": r.get("aid"),
+                         "ctime": r.get("ctime_title"), "status": r.get("status_raw"),
+                         "title": r.get("title")} for r in targets],
+        }
+        return format_json_output(payload) if fmt == "json" else \
+            "\n".join(f"{r.get('code')}\t{r.get('ctime_title')}\t{r.get('status_title')}" for r in targets)
+
+    if not auto_confirm:
+        confirm = input(f"\n确认暂缓以上 {len(targets)} 条? (y/N): ").strip().lower()
+        if confirm not in ("y", "yes"):
+            print("已取消。", file=sys.stderr)
+            return None
+
+    progress_file = SKILL_DIR / "data" / "batch_hang_progress.json"
+    progress_file.parent.mkdir(parents=True, exist_ok=True)
+    prog = {
+        "started_at": datetime.now().isoformat(), "total": len(targets),
+        "done": 0, "succeeded": 0, "failed": 0, "errors": [], "completed": False,
+    }
+    for i, r in enumerate(targets, 1):
+        cur = r.get("status_raw") or "WAIT_ANALYSIS"
+        res = execute_hang(cfg, r["aid"], comment="批量暂缓",
+                           current_status=cur, entity_type=entity_type)
+        prog["done"] = i
+        if res["success"]:
+            prog["succeeded"] += 1
+            print(f"  [{i}/{len(targets)}] {r.get('code')}: OK", file=sys.stderr)
+        else:
+            prog["failed"] += 1
+            prog["errors"].append({"aid": r["aid"], "code": r.get("code"), "error": res["message"]})
+            print(f"  [{i}/{len(targets)}] {r.get('code')}: FAIL - {res['message'][:80]}", file=sys.stderr)
+        with open(progress_file, "w", encoding="utf-8") as f:
+            json.dump(prog, f, ensure_ascii=False, indent=2)
+        if i < len(targets):
+            time.sleep(0.5)
+    prog["completed"] = True
+    prog["finished_at"] = datetime.now().isoformat()
+    with open(progress_file, "w", encoding="utf-8") as f:
+        json.dump(prog, f, ensure_ascii=False, indent=2)
+    print(f"\n批量暂缓完成: {prog['succeeded']}/{prog['total']} 成功, {prog['failed']} 失败", file=sys.stderr)
+    return format_json_output(prog) if fmt == "json" else f"{prog['succeeded']}/{prog['total']} 成功"
 
 
 def cmd_batch_hang(
@@ -1271,7 +1413,8 @@ def build_parser() -> argparse.ArgumentParser:
     group.add_argument("--dashboard", action="store_true", help="按状态统计概览")
     group.add_argument("--list", action="store_true", help="列出需求列表")
     group.add_argument("--detail", metavar="AID", help="查看需求详情 (aid)")
-    group.add_argument("--batch-hang", action="store_true", help="批量暂缓低分需求")
+    group.add_argument("--batch-hang", action="store_true", help="批量暂缓低分需求(评分缓存)")
+    group.add_argument("--hang", action="store_true", help="批量暂缓(实时筛选, 支持时间窗口/dry-run)")
     group.add_argument("--hang-progress", metavar="ID", nargs="?", const="latest", help="查询批量暂缓进度")
 
     # Filters
@@ -1280,6 +1423,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--assignee", help="经办人 ID")
     parser.add_argument("--all", action="store_true", dest="fetch_all", help="翻页获取全部结果")
     parser.add_argument("--below", type=int, default=40, help="批量暂缓的分值阈值 (默认: 40)")
+    parser.add_argument("--created-within", type=int, metavar="N", help="只取最近 N 天创建的 (配合 --hang/--list)")
+    parser.add_argument("--created-after", metavar="DATE", help="只取该日期(YYYY-MM-DD)起创建的 (配合 --hang/--list)")
+    parser.add_argument("--dry-run", action="store_true", help="--hang 时仅预览将暂缓的需求, 不执行")
     parser.add_argument("--yes", action="store_true", help="跳过确认直接执行")
     parser.add_argument("--entity", choices=["original", "demand", "defect", "verification"], default="original",
                         help="实体类型: original=原始需求, demand=协作需求, defect=缺陷, verification=验证子任务 (默认: original)")
@@ -1342,6 +1488,20 @@ def main() -> int:
             cfg,
             product=args.product,
             below=args.below,
+            auto_confirm=args.yes,
+            fmt=args.format,
+        )
+
+    elif args.hang:
+        output = cmd_hang(
+            cfg,
+            status=args.status,
+            product=args.product,
+            assignee=args.assignee,
+            entity=args.entity,
+            within_days=args.created_within,
+            after_date=args.created_after,
+            dry_run=args.dry_run,
             auto_confirm=args.yes,
             fmt=args.format,
         )

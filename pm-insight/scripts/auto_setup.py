@@ -256,7 +256,7 @@ def generate_config(cookies, proxy_user, proxy_pass):
             "extra_cookies": {},
         },
         "line_id": "3058614d-5e02-45b3-8084-33d4c6e6a49b",
-        "default_analyst": "0000075951",
+        "default_analyst": "",  # 经办人 aid，留空=不按经办人过滤；用户按需填自己的
     }
 
     # Add ycap cookie with its original name (e.g. ycap_06e6ea000524)

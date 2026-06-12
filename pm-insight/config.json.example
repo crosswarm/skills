@@ -1,4 +1,13 @@
 {
-  "backend_url": "http://localhost:3000",
-  "pm_username": ""
+  "proxy_url": "",
+  "proxy_user": "",
+  "proxy_pass": "",
+  "pm_cookies": {
+    "yht_access_token": "",
+    "tenant_info": "0000",
+    "ycap_session": "",
+    "extra_cookies": {}
+  },
+  "line_id": "3058614d-5e02-45b3-8084-33d4c6e6a49b",
+  "default_analyst": ""
 }

@@ -125,7 +125,8 @@ python .agent\skills\pm-insight\scripts\auto_setup.py
 | `--dashboard` | 按状态统计概览 | `--dashboard --entity defect` |
 | `--list` | 列出需求（默认: 待分析+待规划） | `--list --format json` |
 | `--detail <AID>` | 查看单条需求详情 | `--detail 1234567890` |
-| `--batch-hang` | 批量暂缓低分需求 | `--batch-hang --product 工作流 --below 40 --yes` |
+| `--batch-hang` | 批量暂缓低分需求（依赖评分缓存，需 `--product`） | `--batch-hang --product 工作流 --below 40 --yes` |
+| `--hang` | 批量暂缓（**实时筛选**，支持时间窗口 + dry-run，不依赖缓存） | `--hang --created-within 15 --dry-run` |
 | `--hang-progress [ID]` | 查询批量暂缓执行进度 | `--hang-progress latest` |
 
 ### 2.2 实体类型（`--entity`）
@@ -139,7 +140,7 @@ python .agent\skills\pm-insight\scripts\auto_setup.py
 
 示例: `--entity defect --list --format markdown`
 
-### 2.3 过滤参数（与 `--list` 组合使用）
+### 2.3 过滤参数（与 `--list` / `--hang` 组合使用）
 
 | 参数 | 说明 | 示例 |
 |------|------|------|
@@ -148,7 +149,10 @@ python .agent\skills\pm-insight\scripts\auto_setup.py
 | `--assignee <ID>` | 按经办人过滤���`all` 跳过过滤） | `--assignee all` |
 | `--all` | 翻页获取全部结果 | `--list --all` |
 | `--top N` | 限制输出前 N 条 | `--list --top 20` |
-| `--max-results N` | 单页大小（默认 50） | `--max-results 100` |
+| `--max-results N` | 单页大小（默认 50；**API 上限 50，超出自动 clamp**） | `--max-results 50` |
+| `--created-within N` | 只取最近 N 天创建的（按 `ctime` 客户端过滤） | `--list --created-within 15` |
+| `--created-after DATE` | 只取该日期(YYYY-MM-DD)起创建的 | `--created-after 2026-05-28` |
+| `--dry-run` | 配合 `--hang`：仅预览将暂缓的需求，不执行 | `--hang --created-within 15 --dry-run` |
 
 ### 2.4 输出参数
 
@@ -332,10 +336,22 @@ python .agent\skills\pm-insight\scripts\auto_setup.py
 /usr/bin/python3 .agent/skills/pm-insight/scripts/pm_insight.py --detail <AID>
 ```
 
-### 批量暂缓低分需求
+### 批量暂缓低分需求（按评分缓存，需先跑后端分析）
 ```bash
 /usr/bin/python3 .agent/skills/pm-insight/scripts/pm_insight.py --batch-hang --product 工作流 --below 40 --yes
 ```
+
+### 按时间窗口批量暂缓（实时筛选，推荐：先 dry-run 审阅）
+```bash
+# 1) 先预览最近 15 天创建、当前待分析/待规划的需求（不执行）
+/usr/bin/python3 .agent/skills/pm-insight/scripts/pm_insight.py --hang --created-within 15 --dry-run --format markdown
+# 2) 确认无误后执行（自动按每条实际状态暂缓；--yes 跳过交互确认）
+/usr/bin/python3 .agent/skills/pm-insight/scripts/pm_insight.py --hang --created-within 15 --yes
+# 也可指定起始日期 / 限定产品
+/usr/bin/python3 .agent/skills/pm-insight/scripts/pm_insight.py --hang --created-after 2026-05-28 --product 工作流 --dry-run
+```
+> `--hang` 复用 `--list` 的 status/product/assignee 过滤 + 创建时间窗口，对实时结果逐条
+> `processConvert → WAIT_PROCESS`，只暂缓活跃状态（待分析/待规划/实现中），终态自动跳过。可逆。
 
 ### 导出为 Markdown 表格
 ```bash
@@ -360,6 +376,8 @@ python .agent\skills\pm-insight\scripts\auto_setup.py
 |------|------|------|
 | `[FAIL] 网络连接失败` | VPN 未连接或 PM 服务不可达 | 检查 iNode VPN 连接，确认浏览器能打开 pm.yyrd.com |
 | `[ERROR] HTTP 401` | PM cookies 过期 | 重新运行 `auto_setup.py` 或在 Chrome 重新登录后 `--setup` |
+| `401 {"code":40101,"msg":"安全认证未通过"}` | **pmf 安全网关校验的是 `ycap_*` token（非 `yht_access_token`）**，ycap 过期或转录出错 | 从浏览器重抓 `ycap_06e6ea000524` cookie 更新 config；写入前可 base64 解码 ycap payload 段自检 `userCode`（避免转录错） |
+| `auto_setup.py` 报 `security ... exit 36` | Chrome 127+ Keychain ACL 封锁自动解密 Safe Storage | 改手动：DevTools 复制请求 cookie，写入 config 的 `yht_access_token` + `extra_cookies.ycap_*` |
 | `ModuleNotFoundError: requests` | 使用了错误的 Python | 改用 `/usr/bin/python3` |
 | 产品模糊匹配无结果 | 名称不一致 | 先 `--list --top 5 --format json` 查看实际 `productId_title` 值 |
 | `--batch-hang` 部分失败 | 需求状态已变更 | 检查 `--hang-progress` 查看详情 |
@@ -378,7 +396,7 @@ POST https://pmf.yyrd.com/rest/v1/workflow/processConvert
   ?lineId=<cfg.line_id>
   &entityType=ORIGINAL_DEMAND
   &operation=WAIT_PROCESS
-  &currentStatus=WAIT_ANALYSIS
+  &currentStatus=WAIT_ANALYSIS      ← 必须=需求实际当前状态(WAIT_ANALYSIS/ASSIGNING/DEVING…)，传错会被状态机拒
   &tenant_info=<tenant>
 
 Body: {"fieldData": {"aids": ["<aid>"]}}
