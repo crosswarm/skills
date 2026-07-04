@@ -1,0 +1,104 @@
+#!/usr/bin/env python3
+"""ticket-insight S2a 明细拉取（分页+指数退避+pkl缓存+raw CSV）
+用法:
+  python3 ti_fetch.py --project LCZX [--start 2026-01-01 --end 2026-07-01]
+                      [--domain 父 [--sub 子]] [--label 2026H1]
+                      [--with-prev] [--outdir DIR] [--no-cache]
+说明:
+  --with-prev 同时拉去年同期（同比必需）
+  缓存 key = md5(jql+字段版本)，存 skill/.cache/，与输出目录无关
+"""
+import argparse, csv, hashlib, json, pickle, sys, time
+from pathlib import Path
+from ti_common import (CACHE_DIR, banner, build_jql, fmt_secs, get_cookie, jira_get, workdir)
+
+FIELDS_VER = 'v1'
+FIELDS = ('summary,created,status,resolution,assignee,'
+          'customfield_10725,customfield_10729,customfield_10402,'
+          'customfield_10411,customfield_10123')
+CSV_COLS = ['key', 'created', 'month', 'summary', 'customer', 'rd_type',
+            'cust_type', 'solution', 'domain', 'domain_sub', 'status', 'assignee']
+
+def _rec(issue: dict) -> dict:
+    f = issue.get('fields', {})
+    cust = f.get('customfield_10725')
+    cust = (cust[0] if isinstance(cust, list) and cust else cust) or ''
+    if isinstance(cust, dict):
+        cust = cust.get('value') or cust.get('name') or ''
+    rd = (f.get('customfield_10729') or {}).get('value') or '未填写'
+    ct = (f.get('customfield_10402') or {}).get('value') or ''
+    dom = f.get('customfield_10123') or {}
+    created = (f.get('created') or '')[:10]
+    return {
+        'key': issue.get('key'), 'created': created, 'month': created[:7],
+        'summary': (f.get('summary') or '').replace('\n', ' ').strip(),
+        'customer': str(cust).strip(), 'rd_type': rd, 'cust_type': ct,
+        'solution': (f.get('customfield_10411') or '').replace('\n', ' ').strip()[:500],
+        'domain': (dom.get('value') if isinstance(dom, dict) else '') or '',
+        'domain_sub': ((dom.get('child') or {}).get('value') if isinstance(dom, dict) else '') or '',
+        'status': (f.get('status') or {}).get('name') or '',
+        'assignee': (f.get('assignee') or {}).get('displayName') or '',
+    }
+
+def fetch(jql: str, cookie: str, use_cache: bool = True, tag: str = '') -> list[dict]:
+    ck = CACHE_DIR / f'fetch_{hashlib.md5((jql + FIELDS_VER).encode()).hexdigest()[:16]}.pkl'
+    if use_cache and ck.exists():
+        recs = pickle.loads(ck.read_bytes())
+        print(f'  · {tag} 命中缓存: {len(recs):,} 条 ({ck.name})')
+        return recs
+    recs, start_at, total, t0, last_p = [], 0, None, time.time(), 0.0
+    while True:
+        d = jira_get('/rest/api/2/search',
+                     {'jql': jql, 'startAt': start_at, 'maxResults': 100, 'fields': FIELDS}, cookie)
+        total = d.get('total', 0)
+        recs.extend(_rec(i) for i in d.get('issues', []))
+        start_at += 100
+        now = time.time()
+        if now - last_p > 5 or start_at >= total:          # 进度行(≥5s一次)
+            pages, done_p = -(-total // 100), -(-min(start_at, total) // 100)
+            rate = (now - t0) / max(done_p, 1)
+            eta = rate * (pages - done_p)
+            print(f'  · {tag} 拉取中 {done_p}/{pages} 页 · 已 {len(recs):,} 单 · 剩余约 {fmt_secs(eta)}')
+            last_p = now
+        if start_at >= total:
+            break
+    ck.write_bytes(pickle.dumps(recs))
+    print(f'  · {tag} 完成: {len(recs):,} 条, 用时 {fmt_secs(time.time()-t0)} (已缓存)')
+    return recs
+
+def write_csv(recs: list[dict], path: Path):
+    with open(path, 'w', newline='', encoding='utf-8-sig') as fh:
+        w = csv.DictWriter(fh, fieldnames=CSV_COLS)
+        w.writeheader(); w.writerows(recs)
+
+def prev_year(d: str) -> str:
+    y, rest = d.split('-', 1)
+    return f'{int(y)-1}-{rest}'
+
+if __name__ == '__main__':
+    ap = argparse.ArgumentParser()
+    ap.add_argument('--project', required=True)
+    ap.add_argument('--start', default='2026-01-01'); ap.add_argument('--end', default='2026-07-01')
+    ap.add_argument('--domain'); ap.add_argument('--sub')
+    ap.add_argument('--label', default=None, help='范围标签, 默认由日期生成 如 2026H1')
+    ap.add_argument('--with-prev', action='store_true')
+    ap.add_argument('--outdir'); ap.add_argument('--no-cache', action='store_true')
+    a = ap.parse_args()
+    label = a.label or f"{a.start[:4]}_{a.start[5:7]}-{a.end[5:7]}"
+    cookie, _, who = get_cookie(verbose=False)
+    print(banner(2))
+    print(f'▶ 数据拉取 · 登录者 {who}')
+    wd = workdir(a.project, label, a.outdir)
+    out = {}
+    cur = fetch(build_jql(a.project, a.start, a.end, a.domain, a.sub), cookie,
+                not a.no_cache, tag=f'{a.start[:4]}期')
+    p_cur = wd / 'data' / f'raw_tickets_cur.csv'; write_csv(cur, p_cur)
+    out['cur'] = {'n': len(cur), 'csv': str(p_cur)}
+    if a.with_prev:
+        prev = fetch(build_jql(a.project, prev_year(a.start), prev_year(a.end), a.domain, a.sub),
+                     cookie, not a.no_cache, tag='同期')
+        p_prev = wd / 'data' / f'raw_tickets_prev.csv'; write_csv(prev, p_prev)
+        out['prev'] = {'n': len(prev), 'csv': str(p_prev)}
+    out['workdir'] = str(wd)
+    print(json.dumps(out, ensure_ascii=False))
+    print(f'✓ 拉取阶段完成 → 下一步: python3 scripts/ti_themes.py --workdir "{wd}" --project {a.project}')

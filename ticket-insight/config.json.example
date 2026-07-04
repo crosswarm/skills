@@ -1,0 +1,7 @@
+{
+  "jira_base_url": "https://gfjira.yyrd.com",
+  "username": "your-jira-username",
+  "password_enc": "<由 ti_auth.py --setup 生成, Fernet 机器绑定加密, 不可跨机器复制>",
+  "jsessionid": "<自动维护: 认证成功后写回>",
+  "default_output_dir": ""
+}

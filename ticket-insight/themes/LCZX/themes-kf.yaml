@@ -1,0 +1,132 @@
+project: LCZX
+version: 1.0.0
+source: ported-from-ticket-reduction-analyst-v4.1
+dimension: K
+description: 客开维度末级主题（顺序即优先级）
+leaf_themes:
+- id: K-接口/API对接
+  priority_tier: 1.0
+  keywords:
+  - 接口
+  - api
+  - http
+  - restful
+  - 调用
+  - 调取
+- id: K-数据库/SQL
+  priority_tier: 2.0
+  keywords:
+  - 数据库
+  - sql
+  - 查询语句
+  - 库表
+  - 索引
+- id: K-第三方系统集成
+  priority_tier: 3.0
+  keywords:
+  - 集成
+  - 第三方
+  - 对接
+  - ldap
+  - 友链
+  - ehr
+  - oa
+  - erp
+  - sap
+  - 钉钉对接
+  - 企微对接
+  - webhook
+  - 回调
+  - 事件
+  - 触发器
+  - 事件回调
+  - 事件推送
+- id: K-客开/二开/扩展
+  priority_tier: 4.0
+  keywords:
+  - 客开
+  - 二开
+  - 自定义开发
+  - 扩展开发
+  - 定制
+- id: K-自定义脚本/规则
+  priority_tier: 5.0
+  keywords:
+  - 脚本
+  - 自定义脚本
+  - 规则脚本
+  - js脚本
+- id: K-打印模板/格式
+  priority_tier: 6.0
+  keywords:
+  - 打印
+  - 打印模板
+  - 格式
+  - 套打
+- id: K-报表/审批面板自定义
+  priority_tier: 7.0
+  keywords:
+  - 自定义报表
+  - 审批面板
+  - 自定义视图
+  - 卡片
+- id: K-单点登录/认证
+  priority_tier: 8.0
+  keywords:
+  - sso
+  - 单点
+  - oauth
+  - jwt
+  - 鉴权
+- id: K-性能/数据量优化
+  priority_tier: 9.0
+  keywords:
+  - 性能优化
+  - 数据量
+  - 大数据
+- id: K-工作流/审批流设计
+  priority_tier: 10.0
+  keywords:
+  - 工作流
+  - 审批流
+  - 流程设计
+  - 流程编排
+  - 流程模型
+  - 流程节点
+  - 流程字段
+  - 审批节点
+  - 流程监控
+  - bpm
+  - 审批流程
+- id: K-审批操作/状态异常
+  priority_tier: 11.0
+  keywords:
+  - 审批
+  - 驳回
+  - 退回
+  - 撤回
+  - 转交
+  - 抢占
+  - 批量审批
+  - 加签
+  - 审批意见
+- id: K-零代码/表单字段
+  priority_tier: 12.0
+  keywords:
+  - 零代码
+  - 应用构建
+  - 自建单据
+  - 表单
+  - 字段权限
+  - 数字化建模
+  - 业务对象
+  - 单据注册
+- id: K-移动端/PC端显示
+  priority_tier: 13.0
+  keywords:
+  - 移动端
+  - app端
+  - pc端
+  - 移动审批
+  - web端
+  - 界面显示

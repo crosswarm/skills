@@ -1,0 +1,177 @@
+project: LCZX
+version: 1.0.0
+source: ported-from-ticket-reduction-analyst-v4.1
+dimension: I
+description: 实施维度末级主题（顺序即优先级）
+leaf_themes:
+- id: I-审批矩阵配置咨询
+  priority_tier: 1.0
+  keywords:
+  - 审批矩阵
+  - 矩阵规则
+  - 矩阵配置
+  - 矩阵不生效
+  - 矩阵
+- id: I-找人规则配置
+  priority_tier: 2.0
+  keywords:
+  - 找人规则
+  - 选人方式
+  - 选人
+  - 部门负责人
+  - 直接上级
+  - 上级
+  - 角色
+- id: I-字段权限配置
+  priority_tier: 3.0
+  keywords:
+  - 字段权限
+  - 字段隐藏
+  - 字段编辑
+  - 字段不显示
+  - 字段显示
+  - 必填
+- id: I-流程设计-分支条件
+  priority_tier: 4.0
+  keywords:
+  - 分支
+  - 判断
+  - 走向
+  - 路由
+  - 分流
+  - 条件
+- id: I-流程设计-子流程嵌套
+  priority_tier: 5.0
+  keywords:
+  - 子流程
+  - 嵌套
+  - 父流程
+  - 主流程
+- id: I-流程发布/生效
+  priority_tier: 6.0
+  keywords:
+  - 发布
+  - 生效
+  - 启用
+  - 失效
+  - 模板版本
+- id: I-审批人/会签设置
+  priority_tier: 7.0
+  keywords:
+  - 审批人
+  - 会签
+  - 或签
+  - 抄送
+  - 知会
+- id: I-业务对象/数据源配置
+  priority_tier: 8.0
+  keywords:
+  - 业务对象
+  - 数据源
+  - 表关联
+  - 字典
+  - 选项值
+- id: I-表单/模板配置
+  priority_tier: 9.0
+  keywords:
+  - 表单
+  - 模板
+  - 控件
+  - 布局
+- id: I-退回/驳回配置
+  priority_tier: 10.0
+  keywords:
+  - 退回起草人
+  - 退回到
+  - 退回
+  - 驳回
+- id: I-连岗审批
+  priority_tier: 11.0
+  keywords:
+  - 连岗
+  - 连岗审批
+  - 同岗审批
+  - 连续同岗
+  - 离职转交
+- id: I-代理人设置
+  priority_tier: 12.0
+  keywords:
+  - 代理人设置
+  - 代理人
+  - 我的代理
+  - 代理审批
+  - 代理范围
+  - 代理已有待办
+  - 代理分支
+  - 被代理
+  - 永久代理
+  - 多层代理
+  - 代理转交
+  - 代理
+- id: I-催办/通知配置
+  priority_tier: 13.0
+  keywords:
+  - 催办
+  - 提醒
+  - 通知
+  - 短信
+  - 邮件
+- id: I-打印配置
+  priority_tier: 14.0
+  keywords:
+  - 打印模板
+  - 打印格式
+  - 套打
+  - 打印预览
+  - 打印设置
+  - 打印
+- id: I-导出配置
+  priority_tier: 15.0
+  keywords:
+  - 导出excel
+  - 导出筛选
+  - 导出数据
+  - 数据导出
+  - 批量导出
+  - 导出csv
+  - 导出
+- id: I-报表配置
+  priority_tier: 16.0
+  keywords:
+  - 报表设计
+  - 数据报表
+  - 报表配置
+  - 报表模板
+  - 报表
+- id: I-移动端配置
+  priority_tier: 17.0
+  keywords:
+  - 移动端
+  - 手机
+  - app
+  - h5
+  - 钉钉
+  - 企微
+- id: I-数据迁移/导入
+  priority_tier: 18.0
+  keywords:
+  - 导入
+  - 迁移
+  - 历史数据
+- id: I-基础操作咨询
+  priority_tier: 19.0
+  keywords:
+  - 怎么做
+  - 如何
+  - 操作步骤
+  - 求助
+  - 询问
+  - 是否能
+- id: I-环境/部署/版本
+  priority_tier: 20.0
+  keywords:
+  - 环境
+  - 部署
+  - 版本
+  - 升级
+  - 灰度
