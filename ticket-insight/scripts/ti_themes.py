@@ -17,7 +17,7 @@ import argparse, csv, json, random, re, sys
 from collections import Counter, defaultdict
 from pathlib import Path
 import yaml
-from ti_common import THEMES_DIR
+from ti_common import THEMES_DIR, OVERAGG_SHARE
 
 # ── 原则② 解决方案语义层信号（优先级0, 摘自 best-practices v1.2）────────────────
 RD_FIX_SIGNALS = ['代码修复', '代码已修复', '代码中修复', '代码已经修复', '链路', '新链路', '旧链路',
@@ -139,8 +139,9 @@ def load_rows(p: Path):
 def run_classify(wd: Path, project: str):
     ts = ThemeSets(project)
     if not ts.has_seed:
-        print(f'ℹ️ {project} 无主题种子库 → 需 LLM 归纳: 先跑本命令得到未归类样本, '
-              f'由 Claude 按8原则起草 themes/{project}/themes-auto.yaml 后重跑')
+        print(f'ℹ️ {project} 无主题种子库 → 需 LLM 归纳: ①先 `ti_scope.py --project {project} --seeds` '
+              f'拿业务子模块 seed 候选 ②读未归类样本标题 ③按8原则+seed 起草 themes/{project}/themes-auto.yaml '
+              f'(seed 只做候选命名, 关键词须来自标题且够具体, 避免过度聚合) 后重跑')
     out_all = {}
     for tag in ('cur', 'prev'):
         src = wd / 'data' / f'raw_tickets_{tag}.csv'
@@ -180,9 +181,31 @@ def run_classify(wd: Path, project: str):
                        'score': round(a['n'] / max_n * 1.0 + ipc / max_ipc * 1.5, 3),
                        'samples': a['samples']})
     themes.sort(key=lambda t: -t['n'])
+    # 过度聚合检测：单一主题占其【维度】>OVERAGG_SHARE = 人工未细分（如 LCZX 工作流设计>60%），须再拆。
+    # 绝对数量下限 floor：避免小维度里"占比高"的小样本假象（如客开维度共 11 单里某主题 4 单=36%，无意义）。
+    total_cur = out_all.get('cur', {}).get('n', 0)
+    floor = max(30, round(total_cur * 0.03))
+    dim_tot = defaultdict(int)
+    for t in themes:
+        dim_tot[t['dim']] += t['n']
+    overagg = []
+    for t in themes:
+        if t['theme'].endswith('未归类') or t['dim'] == 'X':
+            continue
+        share = t['n'] / max(dim_tot[t['dim']], 1)
+        t['dim_share'] = round(share, 3)
+        if share > OVERAGG_SHARE and t['n'] >= floor:      # 占比超阈 且 体量够大 才算过度聚合
+            overagg.append({'theme': t['theme'], 'dim': t['dim'], 'n': t['n'],
+                            'dim_share_pct': round(share * 100, 1),
+                            'total_pct': round(t['n'] / max(total_cur, 1) * 100, 1)})
     (wd / 'data' / 'themes_summary.json').write_text(
-        json.dumps({'project': project, 'stats': out_all, 'themes': themes}, ensure_ascii=False, indent=1),
-        encoding='utf-8')
+        json.dumps({'project': project, 'stats': out_all, 'themes': themes, 'overagg': overagg},
+                   ensure_ascii=False, indent=1), encoding='utf-8')
+    if overagg:
+        print(f'⚠️ 过度聚合 {len(overagg)} 个主题（占其维度 >{OVERAGG_SHARE*100:.0f}%，须按标题再拆）:')
+        for o in overagg:
+            print(f'    {o["dim"]} {o["theme"]}: {o["n"]}单 = 维度内 {o["dim_share_pct"]}%')
+        print('    → 用 `--overagg` 看样本标题，拆成更细叶级主题后重跑')
     # 未归类样本单独导出（供 LLM 补聚 / 人工指定）
     un = [r for r in rows if r['theme'].endswith('未归类')]
     if un:
@@ -239,11 +262,38 @@ def cmd_apply_edits(wd: Path, edits_path: str):
 def cmd_gate(wd: Path):
     doc = json.loads((wd / 'data' / 'themes_summary.json').read_text(encoding='utf-8'))
     s = doc['stats']['cur']
-    ok = s['uncls_pct'] <= 3.0 and s['other_pct'] <= 3.0
-    print(f'门禁: 主题未归类 {s["uncls_pct"]}% / 维度其他 {s["other_pct"]}% / 阈值 3% → {"✅ 通过" if ok else "❌ 未通过"}')
-    if not ok:
-        print('→ 处置: ①LLM 补聚(写 themes-auto.yaml 后重跑) ②确认闸口"待归类批"人工指定 ③用户显式豁免(记入报告口径)')
+    overagg = doc.get('overagg', [])
+    ok_uncls = s['uncls_pct'] <= 3.0 and s['other_pct'] <= 3.0
+    ok_agg = not overagg
+    print(f'门禁① 覆盖率: 主题未归类 {s["uncls_pct"]}% / 维度其他 {s["other_pct"]}% / 阈值 3% → '
+          f'{"✅" if ok_uncls else "❌"}')
+    print(f'门禁② 过度聚合: {len(overagg)} 个主题占其维度 >{OVERAGG_SHARE*100:.0f}% → '
+          f'{"✅ 无" if ok_agg else "❌ 须再拆"}')
+    for o in overagg:
+        print(f'      {o["dim"]} {o["theme"]}: {o["dim_share_pct"]}%')
+    if not (ok_uncls and ok_agg):
+        if not ok_uncls:
+            print('→ 覆盖率处置: ①LLM 补聚(写 themes-auto.yaml 重跑) ②确认闸口人工指定 ③用户显式豁免(记入口径)')
+        if not ok_agg:
+            print('→ 过度聚合处置: `--overagg` 看该主题样本标题 → 拆成更细叶级主题(改 themes-auto.yaml)重跑；'
+                  '过度聚合=人工未细分, 不得直接放行(除非用户显式豁免)')
         sys.exit(3)
+
+def cmd_overagg(wd: Path, project: str):
+    """列出过度聚合主题 + 各自样本标题，供 LLM 拆分为更细叶级主题"""
+    doc = json.loads((wd / 'data' / 'themes_summary.json').read_text(encoding='utf-8'))
+    overagg = doc.get('overagg', [])
+    if not overagg:
+        print('✅ 无过度聚合主题'); return
+    rows = load_rows(wd / 'data' / 'theme_ticket_map_cur.csv')
+    for o in overagg:
+        hits = [r for r in rows if r['theme'] == o['theme'] and r['dim'] == o['dim']]
+        print(f'\n══ {o["dim"]} {o["theme"]} · {o["n"]}单 = 维度内 {o["dim_share_pct"]}%（须拆）══')
+        import re as _re
+        for r in hits[:40]:
+            print('  ' + _re.sub(r'【[^】]*】', '', r['summary'])[:66])
+    print(f'\n→ 依据以上标题，在 themes/{project}/themes-auto.yaml 把每个过度聚合主题拆成 3-6 个更细'
+          f'叶级主题(具体关键词，非宽泛模块名)，删掉/收窄原宽主题的关键词，再重跑聚合。')
 
 def cmd_finalize(wd: Path, project: str):
     doc = json.loads((wd / 'data' / 'themes_summary.json').read_text(encoding='utf-8'))
@@ -262,6 +312,7 @@ if __name__ == '__main__':
     ap.add_argument('--batches', action='store_true')
     ap.add_argument('--apply-edits')
     ap.add_argument('--gate', action='store_true')
+    ap.add_argument('--overagg', action='store_true', help='列出过度聚合主题+样本标题供拆分')
     ap.add_argument('--finalize', action='store_true')
     a = ap.parse_args()
     wd = Path(a.workdir).expanduser()
@@ -271,6 +322,8 @@ if __name__ == '__main__':
         cmd_apply_edits(wd, a.apply_edits)
     elif a.gate:
         cmd_gate(wd)
+    elif a.overagg:
+        cmd_overagg(wd, a.project or '')
     elif a.finalize:
         cmd_finalize(wd, a.project or '')
     elif a.sample:

@@ -42,7 +42,8 @@ python3 scripts/ti_auth.py --test
 ### S1 范围选择
 ```bash
 python3 scripts/ti_scope.py --list-projects 流程          # 用户说不清 key 时检索
-python3 scripts/ti_scope.py --project LCZX --domains      # 领域模块编号菜单(可选筛选)
+python3 scripts/ti_scope.py --project LCZX --domains      # 领域模块菜单(标注[跳过非业务]+输出seed候选)
+python3 scripts/ti_scope.py --project LCZX --seeds        # 仅输出业务子模块 seed 候选(供S2主题起草)
 python3 scripts/ti_scope.py --project LCZX --probe [--start … --end … --domain 父 --sub 子]
 ```
 - 默认时间 2026-01-01~2026-07-01（2026 上半年），自动含去年同期
@@ -50,13 +51,33 @@ python3 scripts/ti_scope.py --project LCZX --probe [--start … --end … --doma
 - 工单 >5,000 时按脚本警告建议用户缩小范围
 
 ### S2 主题聚合 + 人工确认（核心闸口）
+
+> **主题聚合五铁律（所有用本 skill 的 agent 必须遵守，别绕过）**
+> 1. **标题概要优先**：主题按【工单标题/概要文本】聚类，不是按任何字段值绑定。
+> 2. **cf10123 只做 seed，不做绑定**：领域模块/子模块名仅作【候选主题名 + 关键词灵感来源】。**绝不**因为某工单 cf10123 子模块=「工作流设计」就把它归入该主题——工单归属一律由标题关键词决定。
+> 3. **甄别 seed，剔除非业务**：`技术特性 / 架构与运维 / 前端 / 后端 / 运维 / 性能 / 安全 / 数据库 / 中间件` 等技术分层类**无业务主题意义，不采纳**（`ti_scope --seeds` 已自动过滤，但你仍要肉眼复核）。
+> 4. **禁止过度聚合**：单一主题占其【维度】>25% **且**体量够大（≥max(30, 总量3%)）= 人工没细分（如 LCZX 子模块「工作流设计/流程引擎」>60%），**必须按标题拆成 3-6 个更细叶级主题**。门禁②会拦截，不许带病放行。（体量下限是为过滤小维度里的小样本假象，如客开维度共 11 单里某主题占 36% 其实才 4 单，不算过度聚合。）
+> 5. **seed 名≠好主题**：子模块名往往过宽（「工作流设计」）。用它当 seed 时**关键词要具体**（来自标题的真实痛点词），否则一个宽关键词会吸走一大片 → 触发过度聚合。
+
 ```bash
 python3 scripts/ti_fetch.py --project LCZX --with-prev [--label 2026H1 --domain … --sub … --outdir …]
+python3 scripts/ti_scope.py --project LCZX --seeds                # 取业务子模块 seed 候选(已滤非业务)
 python3 scripts/ti_themes.py --workdir <WD> --project LCZX        # 聚合(种子库规则)
-python3 scripts/ti_themes.py --workdir <WD> --gate                # ≤3% 门禁
+python3 scripts/ti_themes.py --workdir <WD> --gate                # 门禁①覆盖率≤3% + 门禁②无过度聚合
 ```
-- **无种子库项目（LLM 归纳）**：首跑后读 `data/unclassified_cur.csv` 与高频词，由你(Claude)按 8 原则起草 `themes/<PROJ>/themes-auto.yaml`（leaf_themes: id/dimension/keywords；原则：叶级主题不合并独立语义、超大主题拆子叶、横切组件独立、研发镜像产品），写完**重跑聚合**。这就是 R2 收敛循环，直到 gate 通过或需人工兜底
-- gate 未过(exit 3) → 按脚本提示处置；只有用户明说豁免才继续
+
+**主题起草流程（有/无种子库通用）**：
+1. **取 seed**：`ti_scope --project <P> --seeds` → 拿到 `seed_submodules`（仅业务子模块）。这些是**候选主题名**，不是最终主题。
+2. **读标题**：跑一次聚合后读 `data/unclassified_cur.csv` + 高频词，理解该项目真实问题话术。
+3. **起草** `themes/<PROJ>/themes-auto.yaml`（`leaf_themes: [{id, dimension(I/P/K), keywords:[…]}]`），按 8 原则：
+   - 以 seed 业务子模块为**候选命名骨架**，但每个主题的 keywords **来自标题的具体痛点词**（如不是宽泛的「工作流设计」，而是「分支条件/找人规则/审批矩阵/表单绑定」等）
+   - 叶级主题不合并独立语义；横切组件独立；研发镜像产品主题（R- 复用 P- 树）
+   - 功能性主题跨维度时，在 I/P/K 各注册一条（同名不同 dimension）
+4. **重跑聚合** → 看两个门禁：
+   - **门禁①覆盖率**：未归类 & 「其他」维度均 ≤3%。未过 → R2 补聚（对未归类标题继续加主题/关键词）。
+   - **门禁②过度聚合**：无主题占其维度 >25%。未过 → `ti_themes --workdir <WD> --overagg` 看该主题样本标题 → 在 yaml 里把它**拆成更细叶级主题**（加具体关键词、收窄原宽主题）→ 重跑。
+5. 循环 4，直到两个门禁都过（或用户显式豁免，豁免记入报告口径）。
+
 - 打印抽样验证表供用户扫描：`python3 scripts/ti_themes.py --workdir <WD> --sample 200`
 - **逐批弹窗确认**：`python3 scripts/ti_themes.py --workdir <WD> --batches` 拿到批次 JSON →
   弹窗前预告：`共 N 个主题分 M 批，每批约30秒，可随时口头说"合并X到Y/重命名/拆分"`

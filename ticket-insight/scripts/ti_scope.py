@@ -8,7 +8,8 @@
 """
 import argparse, json, sys
 from datetime import date
-from ti_common import (banner, build_jql, count_only, fmt_secs, get_cookie, jira_get, THEMES_DIR)
+from ti_common import (banner, build_jql, count_only, fmt_secs, get_cookie, jira_get,
+                       is_business_module, THEMES_DIR)
 
 DEF_START, DEF_END = '2026-01-01', '2026-07-01'   # 默认 2026 上半年
 
@@ -43,11 +44,37 @@ def cmd_domains(cookie, project):
     if not opts:
         print(f'ℹ️ {project} 无领域模块(cf10123)可选值，跳过该筛选即可')
         return
-    print(f'{project} 领域模块可选值（0=不筛选）：')
+    print(f'{project} 领域模块可选值（0=不筛选；[跳过]=技术分层类，无业务主题意义）：')
     print('  0. （不筛选）')
     for i, o in enumerate(opts, 1):
-        kids = f' → 二级: {", ".join(o["children"][:8])}{"…" if len(o["children"])>8 else ""}' if o['children'] else ''
-        print(f'  {i}. {o["value"]}{kids}')
+        biz = is_business_module(o['value'])
+        tag = '' if biz else '  ⟨跳过·非业务⟩'
+        kb = [c for c in o['children'] if is_business_module(c)]
+        ks = [c for c in o['children'] if not is_business_module(c)]
+        parts = []
+        if kb: parts.append('业务子模块 seed: ' + ', '.join(kb[:8]) + ('…' if len(kb) > 8 else ''))
+        if ks: parts.append('⟨跳过⟩ ' + ', '.join(ks[:5]))
+        kids = (' → ' + ' | '.join(parts)) if parts else ''
+        print(f'  {i}. {o["value"]}{tag}{kids}')
+    seeds = business_seeds(opts)
+    print('\n📎 主题 seed 候选（仅业务子模块；⚠️ 只做候选命名/关键词来源，S2 须按工单标题聚类，'
+          '不得按 cf10123 字段值绑定工单；占比过高的须再拆）:')
+    print(json.dumps({'seed_submodules': seeds}, ensure_ascii=False))
+
+def business_seeds(opts):
+    """过滤出有业务意义的领域/子模块作为主题 seed 候选（技术分层类整支/逐项剔除）"""
+    seeds = []
+    for o in opts:
+        if not is_business_module(o['value']):     # 父级本身非业务 → 整支跳过
+            continue
+        kids = [c for c in o['children'] if is_business_module(c)]
+        seeds.append({'domain': o['value'], 'sub_seeds': kids})
+    return seeds
+
+def cmd_seeds(cookie, project):
+    """仅输出业务 seed 候选 JSON（供 S2 引导 LLM 归纳主题用）"""
+    seeds = business_seeds(get_domains(cookie, project))
+    print(json.dumps({'project': project, 'seed_submodules': seeds}, ensure_ascii=False))
 
 def cmd_probe(cookie, project, start, end, domain, sub):
     print(banner(1))
@@ -88,6 +115,7 @@ if __name__ == '__main__':
     ap.add_argument('--list-projects', nargs='?', const='', metavar='关键词')
     ap.add_argument('--project')
     ap.add_argument('--domains', action='store_true')
+    ap.add_argument('--seeds', action='store_true', help='仅输出业务 seed 候选 JSON')
     ap.add_argument('--probe', action='store_true')
     ap.add_argument('--start', default=DEF_START)
     ap.add_argument('--end', default=DEF_END)
@@ -99,6 +127,9 @@ if __name__ == '__main__':
     elif a.domains:
         if not a.project: sys.exit('--domains 需要 --project')
         cmd_domains(cookie, a.project)
+    elif a.seeds:
+        if not a.project: sys.exit('--seeds 需要 --project')
+        cmd_seeds(cookie, a.project)
     elif a.probe:
         if not a.project: sys.exit('--probe 需要 --project')
         cmd_probe(cookie, a.project, a.start, a.end, a.domain, a.sub)

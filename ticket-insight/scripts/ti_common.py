@@ -24,6 +24,32 @@ _CTX = ssl.create_default_context(); _CTX.check_hostname = False; _CTX.verify_mo
 
 DEFAULT_BASE = 'https://gfjira.yyrd.com'
 
+# ── 领域模块(cf10123) seed 甄别：技术分层类无业务主题意义，不采纳为 seed ──────────
+# 规则：cf10123 的领域/子模块【只做主题 seed（候选命名/关键词来源）】，绝不按字段值直接绑定工单。
+# 这些是"技术分层/非业务"分类，出现在领域或子模块名里 → 该项 seed 丢弃（工单仍按标题聚类，不受影响）。
+NON_BUSINESS_MODULES = {
+    '技术特性', '架构与运维', '架构', '运维', '性能', '安全', '稳定性', '数据库',
+    '前端', '后端', '中间件', '基础技术', '技术', '底层', '部署', '监控', '日志',
+    '缓存', '网关', '基础设施', '其他', '其它', '未分类', '待分类', '默认', '通用', '综合',
+}
+_TECH_SEG = ('前端', '后端', '运维', '架构', '性能', '稳定性', '中间件', '数据库', '技术特性', '技术')
+
+def is_business_module(name: str) -> bool:
+    """cf10123 领域/子模块是否有业务主题意义（过滤技术分层类，如 技术特性/架构与运维/前端）"""
+    n = (name or '').strip()
+    if not n:
+        return False
+    if n in NON_BUSINESS_MODULES:
+        return False
+    seg = n.split('-')[-1].strip()          # "流程中心-前端" → 末段"前端" 是技术分层 → 非业务
+    if seg in NON_BUSINESS_MODULES or seg in _TECH_SEG:
+        return False
+    return True
+
+# 单一主题在其【所属维度】内的占比上限。超过 = 过度聚合（人工未细分，如 LCZX "工作流设计">60%），
+# 必须再拆：该主题只能当 seed 候选名，实际须按工单标题拆成更细的叶级主题。
+OVERAGG_SHARE = 0.25
+
 # ── 配置 ──────────────────────────────────────────────────────────────────────
 def load_config() -> dict:
     if CONFIG_PATH.exists():
