@@ -3,9 +3,10 @@
 输入: workdir/data/analysis.json (+themes_summary.json)
 用法: python3 ti_report.py --workdir DIR --project LCZX --label 2026H1 [--domain 父 --sub 子]
 """
-import argparse, html, json
+import argparse, html, json, sys
 from datetime import date
 from pathlib import Path
+from ti_common import clear_active, read_state, stage_at_least, write_state
 
 ARROW = lambda v: ('—' if v is None else (f'🔴▲{v}%' if v > 0 else f'🟢▼{abs(v)}%' if v < 0 else '0%'))
 
@@ -13,6 +14,52 @@ def md_table(headers, rows):
     out = ['| ' + ' | '.join(headers) + ' |', '|' + '|'.join(['---'] * len(headers)) + '|']
     out += ['| ' + ' | '.join(str(c) for c in r) + ' |' for r in rows]
     return '\n'.join(out)
+
+INSIGHTS_PLACEHOLDER = ('> （本次未生成智能总结——可要求 Claude 基于 data/analysis.json 按 '
+                        'references/insights-template.md 协议撰写 data/insights.md 后重跑报告。）')
+
+def validate_insights(text: str, themes_doc: dict, analysis: dict) -> tuple[list, list]:
+    """防幻觉校验: 返回(未知主题名列表→阻断, 未核对数字列表→警告)"""
+    import re
+    real = {t['theme'] for t in themes_doc.get('themes', [])}
+    stop = '\\s，。;；:：()（）"\'`*【】\\[\\]|,.'
+    mentioned = set(re.findall(rf'[PRIK]-[^{stop}]+', text)) | set(re.findall(r'其他-[一-鿿]+', text))
+    unknown = sorted({m.strip('*`') for m in mentioned} - real)
+    valid_nums = set()
+    for t in themes_doc.get('themes', []):
+        valid_nums.update([t['n'], t['cust']])
+    o = analysis.get('overall', {})
+    for s in (o.get('cur', {}), o.get('prev', {})):
+        valid_nums.update([s.get('n'), s.get('cust')])
+    for d in analysis.get('dimensions', []):
+        valid_nums.update([d['cur']['n'], d['cur']['cust'], d['prev']['n'], d['prev']['cust']])
+    for m in analysis.get('monthly', []):
+        valid_nums.update([m['n'], m['cust'], m['prev_n']])
+    for c in analysis.get('key_customers', []):
+        valid_nums.add(c.get('n'))
+    for d in analysis.get('dimensions', []):
+        for kc in d.get('key_customers', []):
+            valid_nums.add(kc.get('n'))
+    nums = {int(n.replace(',', '')) for n in re.findall(r'(\d[\d,]*)\s*单', text)}
+    unverified = sorted(n for n in nums if n not in valid_nums and n >= 10)
+    return unknown, unverified
+
+def load_insights(wd: Path, force: bool, themes_doc: dict, analysis: dict) -> str:
+    p = wd / 'data' / 'insights.md'
+    if not p.exists():
+        print('ℹ️ 未找到 data/insights.md，报告的智能总结章将显示占位提示')
+        return INSIGHTS_PLACEHOLDER
+    text = p.read_text(encoding='utf-8').strip()
+    unknown, unverified = validate_insights(text, themes_doc, analysis)
+    if unverified:
+        print(f'⚠️ insights 中 {len(unverified)} 个数字未能在数据中核对到(可能为估算值, 请确认已标注): {unverified[:8]}')
+    if unknown:
+        print(f'❌ insights 引用了不存在的主题名: {unknown}')
+        if not force:
+            print('   已阻断报告生成(防幻觉)。请修正 data/insights.md 后重跑, 或 --force 越过。')
+            sys.exit(6)
+        print('   --force 已越过(风险自担)')
+    return text
 
 def build_md(a, meta):
     o, dims = a['overall'], [d for d in a['dimensions'] if d['dim'] != 'X']
@@ -47,7 +94,8 @@ def build_md(a, meta):
                       [[t['theme'], next(d['name'] for d in dims if t in d['top_themes']),
                         t['n'], t['cust'], t['ipc'], t['score']] for t in all_tops]))
     L += ['', '> 复合权重 = 工单量(×1.0) + IPC(×1.5) 归一化得分，奖励覆盖面广的问题。全部主题见 data/themes-final.yaml',
-          '', '## 四、四维度专项', '']
+          '', '## 四、智能总结与改进建议', '', meta.get('insights') or INSIGHTS_PLACEHOLDER, '',
+          '## 五、四维度专项', '']
     for d in dims:
         L += [f"### {d['name']}维度（{d['cur']['n']:,} 单 · 同比 {ARROW(d['yoy_n'])}）", '',
               md_table(['指标', '本期', '同期', '同比'],
@@ -68,22 +116,8 @@ def build_md(a, meta):
     if x:
         L += [f"### 其他/排除（{x['cur']['n']} 单, 占比 {x['cur']['n']/max(o['cur']['n'],1)*100:.1f}%）",
               '> 含真无效(废弃/无法复现/重复)与无法归类工单；治理目标 ≤3%。', '']
-    L += ['## 五、风险与建议', '']
-    risky = [d for d in dims if d['yoy_n'] is not None and d['yoy_n'] > 10]
-    if risky:
-        for d in risky:
-            tt = d['top_themes'][0] if d['top_themes'] else None
-            L.append(f"- 🔴 **{d['name']}维度同比 +{d['yoy_n']}%**"
-                     + (f"，头部主题「{tt['theme']}」({tt['n']}单) 建议专项治理" if tt else ''))
-    else:
-        L.append('- 🟢 各维度同比无显著恶化')
-    improving = [d for d in dims if d['yoy_n'] is not None and d['yoy_n'] < -10]
-    for d in improving:
-        L.append(f"- 🟢 {d['name']}维度同比 {d['yoy_n']}%，收敛良好，维持治理节奏")
-    if a['key_customers']:
-        c0 = a['key_customers'][0]
-        L.append(f"- 👥 头部客户「{c0['customer']}」{c0['n']} 单，建议月度复盘+知识库自助化")
-    L += ['', '## 附、口径说明与数据目录', '']
+    L += ['## 附、口径说明与数据目录', '']
+    L.append(f"- 知识库: {meta.get('kb') or '未连接（纯数据分析）'} · 报告语言: {meta.get('lang', 'zh-CN')}")
     for c in a['caveats']:
         L.append(f'- ⚠️ {c}')
     L += ['- IPC = 工单数 ÷ 去重客户数（月度用当月去重）；维度映射基于研发确认问题类型 + 解决方案语义层修正',
@@ -102,6 +136,8 @@ HTML_TPL = """<!DOCTYPE html><html lang="zh"><head><meta charset="utf-8">
 <title>{title}</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
 <style>
 body{{font-family:-apple-system,'PingFang SC','Microsoft YaHei',sans-serif;max-width:1080px;margin:0 auto;padding:24px;color:#222;line-height:1.6}}
 h1{{border-bottom:3px solid #2563eb;padding-bottom:8px}} h2{{border-left:4px solid #2563eb;padding-left:10px;margin-top:36px}}
@@ -121,6 +157,8 @@ noscript .chart{{display:none}}</style></head><body>
 <div id="c_pie" class="chart" style="flex:1;min-width:320px"></div>
 <div id="c_dim" class="chart" style="flex:1;min-width:320px"></div></div>{dim_table}
 <h2>主题 Top10（复合权重）</h2><div id="c_theme" class="chart" style="height:400px"></div>{theme_table}
+<h2>智能总结与改进建议</h2>
+<div id="ins" style="background:#f8fafc;border-radius:10px;padding:6px 18px"><pre id="ins_pre" style="white-space:pre-wrap;font-family:inherit">{insights_pre}</pre></div>
 <h2>四维度专项</h2>{dim_sections}
 <h2>风险与口径</h2>{caveats}
 <p class="note">正文不含全量工单列表；原始与加工数据见同目录 <b>data/</b> 文件夹。</p>
@@ -140,6 +178,10 @@ E('c_dim').setOption({{title:{{text:'维度同比%',left:'center'}},tooltip:{{}}
 E('c_theme').setOption({{tooltip:{{}},grid:{{left:220}},xAxis:{{type:'value'}},
  yAxis:{{type:'category',data:A.t_names,inverse:true}},series:[{{type:'bar',data:A.t_counts}}]}});
 }}catch(e){{console.log('图表加载失败(可能离线):',e)}}
+try{{ // 智能总结 md 渲染: marked+DOMPurify 双重处理; 离线/失败保留 <pre> 降级
+if(window.marked&&window.DOMPurify){{
+  document.getElementById('ins').innerHTML=DOMPurify.sanitize(marked.parse(A.insights_md));
+}}}}catch(e){{console.log('insights 渲染降级为纯文本:',e)}}
 </script></body></html>"""
 
 def h_table(headers, rows):
@@ -192,9 +234,12 @@ def build_html(a, meta):
             'dim_names': [d['name'] for d in dims],
             'dim_yoy': [d['yoy_n'] or 0 for d in dims],
             't_names': [t['theme'] for t in all_tops], 't_counts': [t['n'] for t in all_tops]}
+    ins = meta.get('insights') or INSIGHTS_PLACEHOLDER
+    data['insights_md'] = ins
     return HTML_TPL.format(title=f"{meta['project']} 工单深度分析 · {meta['label']}",
                            today=date.today(), scope=html.escape(meta['scope']), cards=cards,
                            trend_table=trend_table, dim_table=dim_table, theme_table=theme_table,
+                           insights_pre=html.escape(ins),
                            dim_sections=''.join(secs), caveats=caveats,
                            data_json=json.dumps(data, ensure_ascii=False))
 
@@ -204,11 +249,24 @@ if __name__ == '__main__':
     ap.add_argument('--project', required=True)
     ap.add_argument('--label', required=True)
     ap.add_argument('--domain'); ap.add_argument('--sub')
+    ap.add_argument('--lang', default='zh-CN', help='报告语言(v1.1 模板仅 zh-CN, 前瞻参数)')
+    ap.add_argument('--force', action='store_true', help='越过 insights 防幻觉阻断(风险自担)')
     a = ap.parse_args()
     wd = Path(a.workdir).expanduser()
+    # v1.1 状态校验: 须已完成分析(同级/更早重入允许)
+    st = read_state(wd)
+    if not stage_at_least(st.get('stage'), 'analyzed'):
+        print(f"❌ 当前阶段={st.get('stage') or '未知'}，尚未完成四维度分析。请先跑 ti_analyze.py。")
+        sys.exit(5)
     analysis = json.loads((wd / 'data' / 'analysis.json').read_text(encoding='utf-8'))
+    themes_doc = json.loads((wd / 'data' / 'themes_summary.json').read_text(encoding='utf-8'))
+    insights = load_insights(wd, a.force, themes_doc, analysis)
     scope = f'{a.project} · {a.label}' + (f' · {a.domain}' + (f'/{a.sub}' if a.sub else '') if a.domain else '')
-    meta = {'project': a.project, 'label': a.label, 'scope': scope}
+    kb_files = st.get('kb_files') or []
+    meta = {'project': a.project, 'label': a.label, 'scope': scope, 'lang': a.lang,
+            'insights': insights, 'kb': ('、'.join(kb_files) if kb_files else None)}
     (wd / 'report.md').write_text(build_md(analysis, meta), encoding='utf-8')
     (wd / 'report.html').write_text(build_html(analysis, meta), encoding='utf-8')
+    write_state(wd, stage='reported')
+    clear_active()          # 分析完成, 释放活跃槽(允许开下一个分析)
     print(f'✓ 报告已生成（html 可直接双击打开）:\n  {wd / "report.md"}\n  {wd / "report.html"}\n  {wd / "data"}/')

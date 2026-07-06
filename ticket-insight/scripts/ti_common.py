@@ -274,8 +274,80 @@ def workdir(project: str, label: str, outdir: str = None) -> Path:
     (wd / 'data').mkdir(parents=True, exist_ok=True)
     return wd
 
+# ── 分析状态机（v1.1: 防多轮会话数据偏差）─────────────────────────────────────
+# 阶段线性推进; 规则=同级或更早阶段幂等重入永远允许(S2内R2/确认循环合法), 只拦向前跳级。
+STAGE_ORDER = ['fetched', 'themed', 'confirmed', 'analyzed', 'reported']
+
+def state_path(wd: Path) -> Path:
+    return Path(wd) / 'data' / 'state.json'
+
+def infer_stage(wd: Path) -> str | None:
+    """v1.0 workdir 无 state.json 时按现存文件推断阶段（向后兼容）"""
+    wd = Path(wd); d = wd / 'data'
+    if (wd / 'report.md').exists() and (d / 'analysis.json').exists():
+        return 'reported'
+    if (d / 'analysis.json').exists():
+        return 'analyzed'
+    if (d / 'themes-final.yaml').exists():
+        return 'confirmed'
+    if (d / 'themes_summary.json').exists():
+        return 'themed'
+    if (d / 'raw_tickets_cur.csv').exists():
+        return 'fetched'
+    return None
+
+def read_state(wd: Path) -> dict:
+    p = state_path(wd)
+    if p.exists():
+        try:
+            return json.loads(p.read_text(encoding='utf-8'))
+        except Exception:
+            pass
+    st = infer_stage(wd)
+    return {'stage': st} if st else {}
+
+def write_state(wd: Path, **updates) -> dict:
+    """flock 保护的 read-modify-write（防并发写坏）"""
+    import fcntl, datetime
+    p = state_path(wd); p.parent.mkdir(parents=True, exist_ok=True)
+    lock = p.parent / '.state.lock'
+    with open(lock, 'w') as lf:
+        fcntl.flock(lf, fcntl.LOCK_EX)
+        cur = {}
+        if p.exists():
+            try:
+                cur = json.loads(p.read_text(encoding='utf-8'))
+            except Exception:
+                cur = {}
+        cur.update(updates)
+        cur['updated_at'] = datetime.datetime.now().isoformat(timespec='seconds')
+        tmp = p.with_suffix('.tmp')
+        tmp.write_text(json.dumps(cur, ensure_ascii=False, indent=1), encoding='utf-8')
+        os.replace(tmp, p)
+        fcntl.flock(lf, fcntl.LOCK_UN)
+    return cur
+
+def stage_at_least(stage: str | None, required: str) -> bool:
+    if stage not in STAGE_ORDER:
+        return False
+    return STAGE_ORDER.index(stage) >= STAGE_ORDER.index(required)
+
+# 活跃分析单槽（config 级, 全局同一时间只允许一个进行中的分析）
+def get_active() -> dict | None:
+    return load_config().get('active_analysis') or None
+
+def set_active(wd: Path, project: str, stage: str):
+    cfg = load_config()
+    cfg['active_analysis'] = {'workdir': str(wd), 'project': project, 'stage': stage}
+    save_config(cfg)
+
+def clear_active():
+    cfg = load_config()
+    if cfg.pop('active_analysis', None) is not None:
+        save_config(cfg)
+
 # ── 进度/横幅 ─────────────────────────────────────────────────────────────────
-STAGES = ['登录', '范围', '主题聚合', '四维度', '报告']
+STAGES = ['登录', '范围', '主题聚合', '分析·总结', '报告']
 def banner(stage_idx: int) -> str:
     parts = []
     for i, s in enumerate(STAGES):

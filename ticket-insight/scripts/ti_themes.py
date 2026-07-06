@@ -17,7 +17,7 @@ import argparse, csv, json, random, re, sys
 from collections import Counter, defaultdict
 from pathlib import Path
 import yaml
-from ti_common import THEMES_DIR, OVERAGG_SHARE
+from ti_common import THEMES_DIR, OVERAGG_SHARE, read_state, stage_at_least, write_state
 
 # ── 原则② 解决方案语义层信号（优先级0, 摘自 best-practices v1.2）────────────────
 RD_FIX_SIGNALS = ['代码修复', '代码已修复', '代码中修复', '代码已经修复', '链路', '新链路', '旧链路',
@@ -54,29 +54,45 @@ def clean(s: str) -> str:
     return URL_PAT.sub(' ', SSO_NOISE.sub(' ', s or '')).lower()
 
 class ThemeSets:
+    """v1.1 加载优先级: themes-confirmed.yaml(用户确认,最前) → ported种子 → themes-auto.yaml(最后)
+    同 id 去重规则: 先加载者(confirmed)完全替换后来者; 空关键词条目(manual-assign)跳过不参与聚类"""
     def __init__(self, project: str):
         d = THEMES_DIR / project
         self.has_seed = d.exists()
-        self.p = self._load(d / 'themes-product.yaml')
-        self.i = self._load(d / 'themes-impl.yaml')
-        self.k = self._load(d / 'themes-kf.yaml')
-        self.r_fb = self._load(d / 'themes-rd-fallback.yaml')
+        self.p, self.i, self.k, self.r_fb = [], [], [], []
+        self._seen = {'P': set(), 'I': set(), 'K': set(), 'R': set()}
+        self.confirmed_ids = set()
+        # 1) 用户确认主题(最优先)
+        self._load_doc(d / 'themes-confirmed.yaml', confirmed=True)
+        # 2) ported 种子
+        for f, dim in (('themes-product.yaml', 'P'), ('themes-impl.yaml', 'I'),
+                       ('themes-kf.yaml', 'K'), ('themes-rd-fallback.yaml', 'R')):
+            self._load_doc(d / f, default_dim=dim)
+        # 3) LLM 归纳沉淀(最后匹配)
+        self._load_doc(d / 'themes-auto.yaml')
         lk = d / 'login-title-kws.yaml'
         self.login_kws = (yaml.safe_load(lk.read_text(encoding='utf-8')) or {}).get('keywords', []) if lk.exists() else []
-        # 追加 LLM 归纳沉淀（themes-auto.yaml, 追加在各维度之后匹配）
-        auto = d / 'themes-auto.yaml'
-        if auto.exists():
-            doc = yaml.safe_load(auto.read_text(encoding='utf-8')) or {}
-            for t in doc.get('leaf_themes', []):
-                dim = (t.get('dimension') or t.get('id', 'P-')[0]).upper()
-                {'P': self.p, 'I': self.i, 'K': self.k, 'R': self.r_fb}.get(dim, self.p).append(
-                    (t['id'], [k.lower() for k in t.get('keywords', [])]))
-    @staticmethod
-    def _load(p: Path):
+
+    def _bucket(self, dim):
+        return {'P': self.p, 'I': self.i, 'K': self.k, 'R': self.r_fb}.get(dim, self.p)
+
+    def _load_doc(self, p: Path, confirmed: bool = False, default_dim: str = None):
         if not p.exists():
-            return []
+            return
         doc = yaml.safe_load(p.read_text(encoding='utf-8')) or {}
-        return [(t['id'], [str(k).lower() for k in t.get('keywords', [])]) for t in doc.get('leaf_themes', [])]
+        for t in doc.get('leaf_themes', []):
+            kws = [str(k).lower() for k in t.get('keywords', [])]
+            if not kws:                                   # manual-assign 等空关键词: 不参与聚类
+                continue
+            dim = (t.get('dimension') or default_dim or t.get('id', 'P-')[0]).upper()
+            if dim not in self._seen:
+                dim = 'P'
+            if t['id'] in self._seen[dim]:                # 同 id: 先加载者(confirmed)已占位, 跳过
+                continue
+            self._seen[dim].add(t['id'])
+            self._bucket(dim).append((t['id'], kws))
+            if confirmed:
+                self.confirmed_ids.add(t['id'])
 
 def match(rules, text):
     for tid, kws in rules:
@@ -210,6 +226,15 @@ def run_classify(wd: Path, project: str):
         for o in overagg:
             print(f'    {o["dim"]} {o["theme"]}: {o["n"]}单 = 维度内 {o["dim_share_pct"]}%')
         print('    → 用 `--overagg` 看样本标题，拆成更细叶级主题后重跑')
+    # v1.1: 用户确认主题低命中警示（固定 <3 单，不自动禁用，交确认闸口人工决定）
+    if ts.confirmed_ids:
+        hit = {t['theme']: t['n'] for t in themes}
+        low = [(cid, hit.get(cid, 0)) for cid in sorted(ts.confirmed_ids) if hit.get(cid, 0) < 3]
+        if low:
+            print(f'⚠️ 用户确认主题本期低命中 {len(low)} 个（<3单，请在确认环节决定保留/调整）:')
+            for cid, n in low:
+                print(f'    {cid}: {n} 单')
+    write_state(wd, stage='themed', confirmed_theme_ids=sorted(ts.confirmed_ids))
     # 未归类样本单独导出（供 LLM 补聚 / 人工指定）
     un = [r for r in rows if r['theme'].endswith('未归类')]
     if un:
@@ -237,8 +262,13 @@ def cmd_batches(wd: Path):
     tail = [t for t in themes if t['n'] < tail_thr]
     un = [t for t in doc['themes'] if t['theme'].endswith('未归类')]
     batches = [head[i:i+4] for i in range(0, len(head), 4)]
+    # v1.1: 用户确认主题低命中单列（<3单, 请用户决定保留/调整）
+    conf_ids = set(read_state(wd).get('confirmed_theme_ids') or [])
+    hit = {t['theme']: t['n'] for t in doc['themes']}
+    low_conf = [{'theme': c, 'n': hit.get(c, 0)} for c in sorted(conf_ids) if hit.get(c, 0) < 3]
     print(json.dumps({'n_themes': len(themes), 'n_batches': len(batches),
                       'tail_count': len(tail), 'unclassified': un,
+                      'low_hit_confirmed': low_conf,
                       'batches': batches,
                       'tail': [{'theme': t['theme'], 'dim': t['dim'], 'n': t['n']} for t in tail]},
                      ensure_ascii=False, indent=1))
@@ -261,6 +291,11 @@ def cmd_apply_edits(wd: Path, edits_path: str):
             r['theme'] = t
         with open(p, 'w', newline='', encoding='utf-8-sig') as fh:
             w = csv.DictWriter(fh, fieldnames=list(rows[0].keys())); w.writeheader(); w.writerows(rows)
+    # v1.1: 累积修订到 edits_applied.json（finalize 回写 confirmed.yaml 时按此归并关键词）
+    acc_p = wd / 'data' / 'edits_applied.json'
+    acc = json.loads(acc_p.read_text(encoding='utf-8')) if acc_p.exists() else {'rename': {}, 'merge': {}, 'assign': {}}
+    acc['rename'].update(ren); acc['merge'].update(mrg); acc['assign'].update(asg)
+    acc_p.write_text(json.dumps(acc, ensure_ascii=False, indent=1), encoding='utf-8')
     print(f'✓ 修订已应用: rename×{len(ren)} merge×{len(mrg)} assign×{len(asg)}; 请重跑 --workdir ... --project ... 刷新汇总')
 
 def cmd_gate(wd: Path):
@@ -301,13 +336,68 @@ def cmd_overagg(wd: Path, project: str):
           f'叶级主题(具体关键词，非宽泛模块名)，删掉/收窄原宽主题的关键词，再重跑聚合。')
 
 def cmd_finalize(wd: Path, project: str):
+    """固化本次主题结构 + 回写用户确认主题库 themes/<PROJ>/themes-confirmed.yaml
+    关键词来源=现行生效规则(ThemeSets)按 edits_applied 归并: rename→旧id关键词移新id;
+    merge→并集且删被并id; assign→keywords:[]仅记录(下次加载跳过)"""
+    import datetime
     doc = json.loads((wd / 'data' / 'themes_summary.json').read_text(encoding='utf-8'))
     final = {'project': project, 'themes': [{'id': t['theme'], 'dimension': t['dim'],
                                              'n': t['n'], 'cust': t['cust'], 'ipc': t['ipc']}
                                             for t in doc['themes']]}
     (wd / 'data' / 'themes-final.yaml').write_text(
         yaml.safe_dump(final, allow_unicode=True, sort_keys=False), encoding='utf-8')
+    # ── 回写 confirmed 主题库 ──
+    ts = ThemeSets(project)
+    live = {}          # id → (dim, keywords) 现行生效规则
+    for dim, rules in (('P', ts.p), ('I', ts.i), ('K', ts.k), ('R', ts.r_fb)):
+        for tid, kws in rules:
+            live[tid] = (dim, list(kws))
+    acc_p = wd / 'data' / 'edits_applied.json'
+    acc = json.loads(acc_p.read_text(encoding='utf-8')) if acc_p.exists() else {'rename': {}, 'merge': {}, 'assign': {}}
+    # merge: 目标关键词 = 并集; 被并 id 移除
+    for src, dst in acc.get('merge', {}).items():
+        if src in live:
+            sdim, skws = live.pop(src)
+            ddim, dkws = live.get(dst, (sdim, []))
+            live[dst] = (ddim, list(dict.fromkeys(dkws + skws)))
+    # rename: 旧 id 关键词移到新 id
+    for old, new in acc.get('rename', {}).items():
+        if old in live:
+            live[new] = live.pop(old)
+    today = datetime.date.today().isoformat()
+    # ⚠️ 回写顺序必须=规则匹配优先级顺序(具体优先), 不能用 themes_summary 的工单量降序——
+    #    否则宽主题(如"通用配置咨询")被排最前吸走细主题, 触发过度聚合(回归实测 79→45 主题坍缩)。
+    summary_ids = {t['theme'] for t in doc['themes']
+                   if not t['theme'].endswith('未归类') and t['dim'] != 'X'}
+    leaf, seen = [], set()
+    for dim, rules in (('P', ts.p), ('I', ts.i), ('K', ts.k), ('R', ts.r_fb)):
+        for tid, _kws in rules:
+            # 应用 rename/merge 变换后的最终 id
+            fid = tid
+            fid = acc.get('merge', {}).get(fid, fid)
+            fid = acc.get('rename', {}).get(fid, fid)
+            if fid in summary_ids and fid in live and fid not in seen:
+                seen.add(fid)
+                leaf.append({'id': fid, 'dimension': live[fid][0], 'keywords': live[fid][1],
+                             'source': 'user-confirmed', 'confirmed_at': today})
+    live_p_ids = {tid for tid, _ in ts.p}
+    for t in doc['themes']:        # assign 等不在规则里的孤立主题: 追加末尾, 空关键词仅记录
+        tid = t['theme']
+        if tid in summary_ids and tid not in seen:
+            if tid.startswith('R-') and ('P-' + tid[2:]) in live_p_ids:
+                continue           # R-镜像主题由 P 规则动态派生, 不落 confirmed(避免空关键词噪音)
+            seen.add(tid)
+            leaf.append({'id': tid, 'dimension': t['dim'], 'keywords': [],
+                         'source': 'manual-assign', 'confirmed_at': today})
+    conf_dir = THEMES_DIR / project
+    conf_dir.mkdir(parents=True, exist_ok=True)
+    (conf_dir / 'themes-confirmed.yaml').write_text(
+        yaml.safe_dump({'project': project, 'version': today,
+                        'description': '用户确认主题库(优先于种子与auto加载; 同id完全替换后者)',
+                        'leaf_themes': leaf}, allow_unicode=True, sort_keys=False), encoding='utf-8')
+    write_state(wd, stage='confirmed')
     print(f'✓ themes-final.yaml 已固化 ({len(final["themes"])} 主题)')
+    print(f'✓ 用户确认主题库已回写: themes/{project}/themes-confirmed.yaml ({len(leaf)} 条, 下次分析优先加载)')
 
 if __name__ == '__main__':
     ap = argparse.ArgumentParser()

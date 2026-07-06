@@ -6,9 +6,10 @@
                        客开K=客开/API; 其他X=安全/运维/升级/环境/无效/未填写
 IPC = 工单数 ÷ 去重客户数（月度 IPC 用当月去重客户）
 """
-import argparse, csv, json
+import argparse, csv, json, sys
 from collections import Counter, defaultdict
 from pathlib import Path
+from ti_common import read_state, stage_at_least, write_state
 
 DIM_NAME = {'P': '产品', 'R': '研发', 'I': '实施', 'K': '客开', 'X': '其他'}
 DIMS = ['P', 'R', 'I', 'K', 'X']
@@ -28,8 +29,22 @@ def yoy(cur, prev):
     return round((cur - prev) / prev * 100, 1) if prev else None
 
 def analyze(wd: Path):
+    # v1.1 状态校验: 须完成主题确认(finalize)才可分析; 同级/更早重入允许, 只拦跳级
+    st = read_state(wd)
+    if not stage_at_least(st.get('stage'), 'confirmed'):
+        print(f"❌ 当前阶段={st.get('stage') or '未知'}，主题尚未确认固化。")
+        print('   发生了什么: 分析要求主题结构先经人工确认(--finalize)，防止未确认数据进入报告。')
+        print('   需要您做什么: 完成确认闸口后执行 ti_themes.py --finalize，再重跑本命令。')
+        sys.exit(5)
     cur = load(wd / 'data' / 'theme_ticket_map_cur.csv')
     prev = load(wd / 'data' / 'theme_ticket_map_prev.csv')
+    # 数据一致性: 主题映射行数=原始明细行数(对磁盘实时计数, 防跨会话串用)
+    raw_n = len(load(wd / 'data' / 'raw_tickets_cur.csv'))
+    if raw_n and len(cur) != raw_n:
+        print(f'❌ 数据不一致: theme_ticket_map_cur({len(cur)}) ≠ raw_tickets_cur({raw_n})。')
+        print('   已自动做什么: 拒绝继续，防止旧聚合结果混入新报告。')
+        print('   需要您做什么: 重跑聚合 ti_themes.py --workdir ... --project ... 后再分析。')
+        sys.exit(5)
     months = sorted({r['month'] for r in cur})
     p_months = sorted({r['month'] for r in prev})
     out = {'overall': {}, 'monthly': [], 'dimensions': [], 'key_customers': [], 'caveats': []}
@@ -136,8 +151,10 @@ def analyze(wd: Path):
         w.writerow(['客户', '工单数', '维度分布', '主要主题'])
         for c in out['key_customers']:
             w.writerow([c['customer'], c['n'], ' / '.join(c['dims']), ' / '.join(c['top_themes'])])
+    write_state(wd, stage='analyzed')
     print(f"✓ 分析完成: 总量 {sc['n']:,}(同比{out['overall']['yoy_n']}%) · IPC {sc['ipc']}(同比{out['overall']['yoy_ipc']}%)"
           f" · 维度 {len(out['dimensions'])} 个 → analysis.json + 3 个 CSV")
+    print('→ 下一步: 由 Claude 按 references/insights-template.md 协议撰写 data/insights.md(智能总结), 再生成报告')
 
 if __name__ == '__main__':
     ap = argparse.ArgumentParser()

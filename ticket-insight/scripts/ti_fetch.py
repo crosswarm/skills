@@ -8,9 +8,10 @@
   --with-prev 同时拉去年同期（同比必需）
   缓存 key = md5(jql+字段版本)，存 skill/.cache/，与输出目录无关
 """
-import argparse, csv, hashlib, json, pickle, sys, time
+import argparse, csv, hashlib, json, pickle, shutil, sys, time
 from pathlib import Path
-from ti_common import (CACHE_DIR, banner, build_jql, fmt_secs, get_cookie, jira_get, workdir)
+from ti_common import (CACHE_DIR, banner, build_jql, fmt_secs, get_cookie, jira_get, workdir,
+                       clear_active, get_active, read_state, set_active, stage_at_least, write_state)
 
 FIELDS_VER = 'v1'
 FIELDS = ('summary,created,status,resolution,assignee,'
@@ -75,6 +76,33 @@ def prev_year(d: str) -> str:
     y, rest = d.split('-', 1)
     return f'{int(y)-1}-{rest}'
 
+def cmd_abort_active():
+    """仅当用户明确说「终止当前分析」时调用（SKILL.md 协议约束）"""
+    act = get_active()
+    if not act:
+        print('ℹ️ 当前没有进行中的分析')
+        return 0
+    wd = Path(act['workdir'])
+    (wd / '.aborted').write_text('aborted by user', encoding='utf-8')
+    write_state(wd, stage='aborted')
+    clear_active()
+    print(f"✅ 已终止分析 {act['project']}（数据保留在 {wd} 供追查；该目录不可复用，同名重开需 --wipe）")
+    return 0
+
+def guard_active(wd: Path, project: str):
+    """单一活跃分析拦截：存在未完成的【其它】分析 → exit 4；.aborted 目录拒复用"""
+    if (wd / '.aborted').exists():
+        print(f'❌ 该 workdir 曾被终止（{wd}）。换一个 --label，或加 --wipe 确认清空后重建。')
+        sys.exit(4)
+    act = get_active()
+    if act and act.get('workdir') != str(wd):
+        st = read_state(Path(act['workdir'])).get('stage')
+        if st not in ('reported', 'aborted', None):
+            print(f"❌ 已有进行中的分析：{act['project']}（进行到 {st}，workdir={act['workdir']}）")
+            print('   请先完成该分析；或明确说「终止当前分析」（我会执行 --abort-active）后再开新分析。')
+            print('   —— 此机制防止多轮会话的数据/分析串用偏差。')
+            sys.exit(4)
+
 if __name__ == '__main__':
     ap = argparse.ArgumentParser()
     ap.add_argument('--project', required=True)
@@ -83,12 +111,22 @@ if __name__ == '__main__':
     ap.add_argument('--label', default=None, help='范围标签, 默认由日期生成 如 2026H1')
     ap.add_argument('--with-prev', action='store_true')
     ap.add_argument('--outdir'); ap.add_argument('--no-cache', action='store_true')
+    ap.add_argument('--abort-active', action='store_true', help='终止当前活跃分析(仅当用户明确要求)')
+    ap.add_argument('--wipe', action='store_true', help='清空曾终止的同名 workdir 后重建')
     a = ap.parse_args()
+    if a.abort_active:
+        sys.exit(cmd_abort_active())
     label = a.label or f"{a.start[:4]}_{a.start[5:7]}-{a.end[5:7]}"
     cookie, _, who = get_cookie(verbose=False)
     print(banner(2))
     print(f'▶ 数据拉取 · 登录者 {who}')
     wd = workdir(a.project, label, a.outdir)
+    if a.wipe and (wd / '.aborted').exists():
+        shutil.rmtree(wd / 'data', ignore_errors=True)
+        (wd / '.aborted').unlink(missing_ok=True)
+        (wd / 'data').mkdir(parents=True, exist_ok=True)
+        print(f'🧹 已清空曾终止的 workdir data/：{wd}')
+    guard_active(wd, a.project)
     out = {}
     cur = fetch(build_jql(a.project, a.start, a.end, a.domain, a.sub), cookie,
                 not a.no_cache, tag=f'{a.start[:4]}期')
@@ -100,5 +138,10 @@ if __name__ == '__main__':
         p_prev = wd / 'data' / f'raw_tickets_prev.csv'; write_csv(prev, p_prev)
         out['prev'] = {'n': len(prev), 'csv': str(p_prev)}
     out['workdir'] = str(wd)
+    scope = f'{a.project} · {a.start}~{a.end}' + (f' · {a.domain}' + (f'/{a.sub}' if a.sub else '') if a.domain else '')
+    write_state(wd, stage='fetched', project=a.project, label=label, scope=scope,
+                fetch_ts=time.strftime('%Y-%m-%d %H:%M:%S'),
+                counts={'cur': out['cur']['n'], 'prev': out.get('prev', {}).get('n')})
+    set_active(wd, a.project, 'fetched')
     print(json.dumps(out, ensure_ascii=False))
     print(f'✓ 拉取阶段完成 → 下一步: python3 scripts/ti_themes.py --workdir "{wd}" --project {a.project}')
