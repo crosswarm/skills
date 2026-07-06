@@ -61,42 +61,33 @@ def load_insights(wd: Path, force: bool, themes_doc: dict, analysis: dict) -> st
         print('   --force 已越过(风险自担)')
     return text
 
-def parse_measures(insights_text: str) -> list:
-    """从 insights.md 解析改进措施: [{title, priority, themes:[...]}]"""
+def parse_theme_actions(insights_text: str) -> dict:
+    """从按维度结构的 insights.md 解析每个主题的动作建议:
+    {theme: {'action': 解决措施, 'effect': 解决效果预估}}"""
     import re
     if not insights_text:
-        return []
-    stop = '\\s，。;；:：()（）、,.*'
-    blocks = re.split(r'\n(?=###\s*措施)', insights_text)
-    out = []
-    for b in blocks:
-        h = re.search(r'###\s*措施\S*[:：]\s*(.+?)(?:（优先级[:：]\s*(\S+?)）|$)', b)
+        return {}
+    out = {}
+    for it in re.split(r'\n(?=\s*\d+\.\s*\*\*)', insights_text):
+        h = re.match(r'\s*\d+\.\s*\*\*(.+?)\*\*', it)
         if not h:
             continue
-        tl = re.search(r'针对主题\**[:：]\s*(.+)', b)     # 容忍 **针对主题**： 加粗
-        themes, raw = [], ''
-        if tl:
-            raw = tl.group(1)
-            themes = [t.strip('*`') for t in re.findall(rf'[PRIK]-[^{stop}]+|其他-[一-鿿/]+', raw)]
-        out.append({'title': h.group(1).strip('*` '), 'priority': (h.group(2) or '').strip(),
-                    'themes': themes, 'raw': raw})
+        act = re.search(r'解决措施\**[:：]\s*(.+)', it)
+        eff = re.search(r'解决效果预估\**[:：]\s*(.+)', it)
+        out[h.group(1).strip()] = {'action': (act.group(1).strip('*` ') if act else ''),
+                                   'effect': (eff.group(1).strip('*` ') if eff else '')}
     return out
 
-def dim_summary(d, measures, theme2dim, md=True):
-    """组合某维度的小结: 主要问题(top主题) + 改进措施计划(insights 中落本维度的措施)"""
-    letter = d['dim']
+def dim_summary(d, theme_actions, md=True):
+    """维度小结: 该维度主要问题(top主题) + 指引到各主题动作建议与智能总结章"""
     probs = [t['theme'] for t in d.get('top_themes', [])[:3]]
-    # 措施归属本维度: 其针对主题落在本维度, 或 raw 文本提到"<维度名>维度"(如"研发维度整体")
-    ms = [m for m in measures
-          if any(theme2dim.get(th) == letter for th in m['themes'])
-          or f"{d['name']}维度" in m.get('raw', '')]
-    mtxt = '、'.join(f"{m['title']}" + (f"（{m['priority']}）" if m['priority'] else '') for m in ms)
     prob_txt = '、'.join(probs) if probs else '无显著集中主题'
-    if not mtxt:
-        mtxt = '详见「智能总结与改进建议」章' if measures else '（本次未生成智能总结）'
     direction = '恶化' if (d['yoy_n'] or 0) > 10 else ('收敛' if (d['yoy_n'] or 0) < -10 else '基本持平')
+    has_act = any(t['theme'] in theme_actions for t in d.get('top_themes', []))
+    tail = '各主题动作建议见下表；整体措施与效果预估见「智能总结与改进建议」章。' if has_act \
+        else '整体措施与效果预估见「智能总结与改进建议」章。'
     body = (f"本维度 {d['cur']['n']:,} 单（同比 {ARROW(d['yoy_n'])}，{direction}）。"
-            f"**主要问题**集中在 {prob_txt}；**改进措施计划**：{mtxt}。")
+            f"**主要问题**集中在 {prob_txt}。{tail}")
     return f"> **维度小结**：{body}" if md else body
 
 def build_md(a, meta):
@@ -134,20 +125,22 @@ def build_md(a, meta):
     L += ['', '> 复合权重 = 工单量(×1.0) + IPC(×1.5) 归一化得分，奖励覆盖面广的问题。全部主题见 data/themes-final.yaml',
           '', '## 四、智能总结与改进建议', '', meta.get('insights') or INSIGHTS_PLACEHOLDER, '',
           '## 五、四维度专项', '']
-    measures = parse_measures(meta.get('insights'))
-    theme2dim = meta.get('theme2dim', {})
+    theme_actions = parse_theme_actions(meta.get('insights'))
     for d in dims:
         L += [f"### {d['name']}维度（{d['cur']['n']:,} 单 · 同比 {ARROW(d['yoy_n'])}）", '',
-              dim_summary(d, measures, theme2dim, md=True), '',
+              dim_summary(d, theme_actions, md=True), '',
               md_table(['指标', '本期', '同期', '同比'],
                        [['工单量', d['cur']['n'], d['prev']['n'], ARROW(d['yoy_n'])],
                         ['客户数', d['cur']['cust'], d['prev']['cust'], ARROW(d['yoy_cust'])],
                         ['IPC', d['cur']['ipc'], d['prev']['ipc'], ARROW(d['yoy_ipc'])]]), '',
               '**月度走势**: ' + ' → '.join(f"{m['month'][-2:]}月{m['n']}" for m in d['monthly']), '']
         if d['top_themes']:
-            L.append('**主要问题（主题 Top）**：')
+            L.append('**主要问题（主题 Top）+ 动作建议**：')
             for t in d['top_themes']:
                 L.append(f"- **{t['theme']}**（{t['n']} 单 / {t['cust']} 客户 / IPC {t['ipc']}）")
+                act = theme_actions.get(t['theme'], {}).get('action')
+                if act:
+                    L.append(f"  - 💡 动作建议: {act}")
                 for tk in t['typical'][:2]:
                     L.append(f"  - 典型: `{tk['key']}` {tk['summary']}（{tk['customer']}）")
         if d['key_customers']:
@@ -255,21 +248,21 @@ def build_html(a, meta):
     theme_table = h_table(['主题', '维度', '工单', '客户', 'IPC', '权重'],
                           [[html.escape(t['theme']), t['dim'], t['n'], t['cust'], t['ipc'], t['score']]
                            for t in all_tops])
-    measures = parse_measures(meta.get('insights'))
-    theme2dim = meta.get('theme2dim', {})
+    theme_actions = parse_theme_actions(meta.get('insights'))
     secs = []
     for d in dims:
         rows = []
         for t in d['top_themes']:
-            tk = '；'.join(f"{x['key']} {html.escape(x['summary'][:40])}" for x in t['typical'][:2])
-            rows.append([html.escape(t['theme']), t['n'], t['cust'], t['ipc'], tk])
+            tk = '；'.join(f"{x['key']} {html.escape(x['summary'][:36])}" for x in t['typical'][:2])
+            act = html.escape(theme_actions.get(t['theme'], {}).get('action', '') or '—')
+            rows.append([html.escape(t['theme']), t['n'], t['cust'], t['ipc'], f'💡 {act}' if act != '—' else '—', tk])
         kc = h_table(['客户', '工单', '主要问题'],
                      [[html.escape(c['customer']), c['n'], html.escape(' / '.join(c['top_themes']))]
                       for c in d['key_customers']]) if d['key_customers'] else ''
-        summ = html.escape(dim_summary(d, measures, theme2dim, md=False))
+        summ = html.escape(dim_summary(d, theme_actions, md=False))
         secs.append(f"<h3>{d['name']}维度（{d['cur']['n']:,} 单 · 同比 {h_arrow(d['yoy_n'])}）</h3>"
                     + f'<p class="note" style="background:#eef4ff;border-color:#2563eb">📌 <b>维度小结</b>：{summ}</p>'
-                    + h_table(['主要问题', '工单', '客户', 'IPC', '典型代表'], rows)
+                    + h_table(['主要问题', '工单', '客户', 'IPC', '动作建议', '典型代表'], rows)
                     + (f'<p><b>重点客户</b></p>{kc}' if kc else ''))
     caveats = ''.join(f'<p class="note">⚠️ {html.escape(c)}</p>' for c in a['caveats']) or '<p>无特别口径警示。</p>'
     data = {'months': [m['month'] for m in a['monthly']],
