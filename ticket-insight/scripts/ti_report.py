@@ -151,8 +151,9 @@ def build_md(a, meta):
             L.append('**主要问题（主题 Top）+ 动作建议**：')
             for t in d['top_themes']:
                 L.append(f"- **{disp(t)}**（{t['n']} 单 / {t['cust']} 客户 / IPC {t['ipc']}）")
-                for s in (t.get('sub') or []):        # 二级子主题
-                    L.append(f"  - └ 二级: {s['label']} — {s['n']} 单（占本主题 {s['n']/max(t['n'],1)*100:.0f}%）")
+                for s in (t.get('sub') or []):        # 二级子主题(带代表工单号)
+                    reps = '；代表: ' + '、'.join(f"`{x['key']}`" for x in s.get('reps', [])) if s.get('reps') else ''
+                    L.append(f"  - └ 二级: {s['label']} — {s['n']} 单（占本主题 {s['n']/max(t['n'],1)*100:.0f}%）{reps}")
                 act = theme_actions.get(disp(t), {}).get('action')
                 if act:
                     L.append(f"  - 💡 动作建议: {act}")
@@ -271,10 +272,11 @@ def build_html(a, meta):
             tk = '；'.join(f"{x['key']} {html.escape(x['summary'][:36])}" for x in t['typical'][:2])
             act = html.escape(theme_actions.get(disp(t), {}).get('action', '') or '—')
             rows.append([html.escape(disp(t)), t['n'], t['cust'], t['ipc'], f'💡 {act}' if act != '—' else '—', tk])
-            if t.get('sub'):        # 二级子主题 mini 表
+            if t.get('sub'):        # 二级子主题 mini 表(带代表工单号)
                 subtables.append(f'<p style="margin:2px 0 2px 12px;font-size:13px"><b>「{html.escape(disp(t))}」二级主题</b></p>'
-                                 + '<div style="margin-left:12px">' + h_table(['二级主题', '工单', '客户', '占本主题'],
-                                   [[html.escape(s['label']), s['n'], s['cust'], f"{s['n']/max(t['n'],1)*100:.0f}%"]
+                                 + '<div style="margin-left:12px">' + h_table(['二级主题', '工单', '客户', '占本主题', '代表工单'],
+                                   [[html.escape(s['label']), s['n'], s['cust'], f"{s['n']/max(t['n'],1)*100:.0f}%",
+                                     '、'.join(html.escape(x['key']) for x in s.get('reps', [])) or '—']
                                     for s in t['sub']]) + '</div>')
         kc = h_table(['客户', '工单', '主要问题'],
                      [[html.escape(c['customer']), c['n'], html.escape(' / '.join(c['top_themes']))]

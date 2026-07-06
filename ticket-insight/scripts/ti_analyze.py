@@ -44,18 +44,30 @@ def subcluster(trs, subdefs):
             if any(k.lower() in text for k in sd.get('keywords', [])):
                 hit = sd['label']; break
         (assigned.setdefault(hit, []) if hit else other).append(r)
+    def reps(rs, k=2):
+        """代表工单: 解决方案最完整 + 客户不重复, 取前 k"""
+        out, seen = [], set()
+        for r in sorted(rs, key=lambda r: -len(r.get('solution') or '')):
+            if r['customer'] in seen:
+                continue
+            seen.add(r['customer'])
+            out.append({'key': r['key'], 'summary': (r['summary'] or '')[:50], 'customer': r['customer']})
+            if len(out) == k:
+                break
+        return out
     for sd in subdefs:
         rs = assigned.get(sd['label'], [])
         if rs:
             groups.append({'label': sd['label'], 'n': len(rs),
-                           'cust': len({r['customer'] for r in rs if r['customer']})})
+                           'cust': len({r['customer'] for r in rs if r['customer']}),
+                           'reps': reps(rs)})
     groups.sort(key=lambda g: -g['n'])
     big = [g for g in groups if g['n'] >= SUB_GROUP_MIN]
     if len(big) < 2:                       # 分不出 ≥2 个有意义子群 → 不下钻
         return None
     if other:
         groups.append({'label': '其他(未细分)', 'n': len(other),
-                       'cust': len({r['customer'] for r in other if r['customer']})})
+                       'cust': len({r['customer'] for r in other if r['customer']}), 'reps': []})
     return groups
 
 _STOP = {'友户通', '麻烦老师', '老师您好', '老师', '谢谢', '您好', '帮忙看', '帮忙看下', '帮忙看看',
