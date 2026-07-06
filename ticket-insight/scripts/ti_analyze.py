@@ -2,7 +2,8 @@
 """ticket-insight S3 四维度分析
 输入: workdir/data/theme_ticket_map_{cur,prev}.csv
 输出: analysis.json + dimension_summary.csv + dimension_monthly.csv + key_customers.csv
-维度口径: 产品P/研发R/实施I/客开K/其他X (classify_tickets 口径, 环境→实施保持同比可比)
+维度口径(2026-07调整): 产品P=需求/UE; 研发R=产品错误/数据错误/设计/效率; 实施I=实施/应用操作;
+                       客开K=客开/API; 其他X=安全/运维/升级/环境/无效/未填写
 IPC = 工单数 ÷ 去重客户数（月度 IPC 用当月去重客户）
 """
 import argparse, csv, json
@@ -107,7 +108,7 @@ def analyze(wd: Path):
 
     # 口径断层自动标注
     if any(m < '2025-04' for m in p_months):
-        out['caveats'].append('「环境问题」自 2025-04 起被「运维问题」取代；本分析将环境问题统一归入实施维度以保持同比可比。')
+        out['caveats'].append('「环境问题」自 2025-04 起被「运维问题」取代；二者及升级/安全均归入「其他」维度（2026-07 口径），不计入实施。')
     if '2026-06' in months:
         out['caveats'].append('「研发确认问题类型=未填写」2026-06 起出现填报漏填激增；未填写工单已按主题倾向推断维度，剩余计入"其他"。')
     x = next((dm for dm in out['dimensions'] if dm['dim'] == 'X'), None)

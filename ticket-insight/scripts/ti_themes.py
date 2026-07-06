@@ -40,11 +40,14 @@ SSO_NOISE = re.compile(r'【(?:帐户|账户)分享链接】[^【]*?(?:https?://
                        r'|帐户分享链接[:：]?\s*https?://\S+|sso链接[:：]?\s*https?://\S+', re.I)
 URL_PAT = re.compile(r'https?://\S+')
 
-# ── 原则① 权威字段 cf10729 → 四维度（classify_tickets 口径; 环境→实施保持同比可比）
-DIM_MAP = {'需求问题': 'P', '设计问题': 'P', 'UE问题': 'P', '效率问题': 'P',
-           '产品错误': 'R', '数据错误': 'R', '安全问题': 'R',
-           '实施问题': 'I', '应用操作': 'I', '运维问题': 'I', '升级问题': 'I', '环境问题': 'I',
-           '客开问题': 'K', 'API问题': 'K'}
+# ── 原则① 权威字段 cf10729 → 四维度（2026-07 口径调整, 见 memory 维度映射）
+#   产品P=需求/UE; 研发R=产品错误/数据错误/设计/效率; 实施I=实施/应用操作;
+#   客开K=客开/API; 其他X=安全/运维/升级/环境/无效/未填写
+DIM_MAP = {'需求问题': 'P', 'UE问题': 'P',
+           '产品错误': 'R', '数据错误': 'R', '设计问题': 'R', '效率问题': 'R',
+           '实施问题': 'I', '应用操作': 'I',
+           '客开问题': 'K', 'API问题': 'K',
+           '安全问题': 'X', '运维问题': 'X', '升级问题': 'X', '环境问题': 'X'}
 DIM_NAME = {'P': '产品', 'R': '研发', 'I': '实施', 'K': '客开', 'X': '其他'}
 
 def clean(s: str) -> str:
@@ -110,7 +113,8 @@ def classify(rec: dict, ts: ThemeSets) -> tuple[str, str]:
         else:
             dim = DIM_MAP.get(rd, 'X')
     if dim == 'X':
-        return 'X', '排除-其他'
+        # 其他维度：安全/运维/升级/环境 保留其问题类型为主题（可分辨），未知类型入"其他-未知"
+        return 'X', f'其他-{rd}' if rd and rd != '未填写' else '未填写-未归类'
     # 主题匹配（原则⑧种子库 + ⑥研发镜像产品）
     if dim == 'I':
         if ts.login_kws and any(k in title_c for k in ts.login_kws):
@@ -263,10 +267,11 @@ def cmd_gate(wd: Path):
     doc = json.loads((wd / 'data' / 'themes_summary.json').read_text(encoding='utf-8'))
     s = doc['stats']['cur']
     overagg = doc.get('overagg', [])
-    ok_uncls = s['uncls_pct'] <= 3.0 and s['other_pct'] <= 3.0
+    # 其他(X)维度现含安全/运维/升级/环境等合法业务类, 不再对"其他占比"硬拦; 只保未归类率≤3%
+    ok_uncls = s['uncls_pct'] <= 3.0
     ok_agg = not overagg
-    print(f'门禁① 覆盖率: 主题未归类 {s["uncls_pct"]}% / 维度其他 {s["other_pct"]}% / 阈值 3% → '
-          f'{"✅" if ok_uncls else "❌"}')
+    print(f'门禁① 覆盖率: 主题未归类 {s["uncls_pct"]}% / 阈值 3% → '
+          f'{"✅" if ok_uncls else "❌"}   (其他维度 {s["other_pct"]}% 仅供参考, 含安全/运维/升级/环境等合法类)')
     print(f'门禁② 过度聚合: {len(overagg)} 个主题占其维度 >{OVERAGG_SHARE*100:.0f}% → '
           f'{"✅ 无" if ok_agg else "❌ 须再拆"}')
     for o in overagg:
