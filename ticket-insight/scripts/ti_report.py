@@ -18,10 +18,20 @@ def md_table(headers, rows):
 INSIGHTS_PLACEHOLDER = ('> （本次未生成智能总结——可要求 Claude 基于 data/analysis.json 按 '
                         'references/insights-template.md 协议撰写 data/insights.md 后重跑报告。）')
 
+def disp(t: dict) -> str:
+    """主题显示名: Agent 命名的 label 优先, 回退机械 id"""
+    return t.get('label') or t.get('theme') or ''
+
 def validate_insights(text: str, themes_doc: dict, analysis: dict) -> tuple[list, list]:
-    """防幻觉校验: 返回(未知主题名列表→阻断, 未核对数字列表→警告)"""
+    """防幻觉校验: 返回(未知主题名列表→阻断, 未核对数字列表→警告)。合法名=主题 id ∪ Agent label"""
     import re
     real = {t['theme'] for t in themes_doc.get('themes', [])}
+    for d in analysis.get('dimensions', []):        # 叠加 Agent 命名的 label(一级+二级)
+        for t in d.get('top_themes', []):
+            if t.get('label'):
+                real.add(t['label'])
+            for s in (t.get('sub') or []):
+                real.add(s['label'])
     stop = '\\s，。;；:：()（）"\'`*【】\\[\\]|,.'
     mentioned = set(re.findall(rf'[PRIK]-[^{stop}]+', text)) | set(re.findall(r'其他-[一-鿿]+', text))
     unknown = sorted({m.strip('*`') for m in mentioned} - real)
@@ -40,6 +50,9 @@ def validate_insights(text: str, themes_doc: dict, analysis: dict) -> tuple[list
     for d in analysis.get('dimensions', []):
         for kc in d.get('key_customers', []):
             valid_nums.add(kc.get('n'))
+        for t in d.get('top_themes', []):          # 二级子主题真实计数
+            for s in (t.get('sub') or []):
+                valid_nums.add(s.get('n'))
     nums = {int(n.replace(',', '')) for n in re.findall(r'(\d[\d,]*)\s*单', text)}
     unverified = sorted(n for n in nums if n not in valid_nums and n >= 10)
     return unknown, unverified
@@ -80,10 +93,10 @@ def parse_theme_actions(insights_text: str) -> dict:
 
 def dim_summary(d, theme_actions, md=True):
     """维度小结: 该维度主要问题(top主题) + 指引到各主题动作建议与智能总结章"""
-    probs = [t['theme'] for t in d.get('top_themes', [])[:3]]
+    probs = [disp(t) for t in d.get('top_themes', [])[:3]]
     prob_txt = '、'.join(probs) if probs else '无显著集中主题'
     direction = '恶化' if (d['yoy_n'] or 0) > 10 else ('收敛' if (d['yoy_n'] or 0) < -10 else '基本持平')
-    has_act = any(t['theme'] in theme_actions for t in d.get('top_themes', []))
+    has_act = any(disp(t) in theme_actions for t in d.get('top_themes', []))
     tail = '各主题动作建议见下表；整体措施与效果预估见「智能总结与改进建议」章。' if has_act \
         else '整体措施与效果预估见「智能总结与改进建议」章。'
     body = (f"本维度 {d['cur']['n']:,} 单（同比 {ARROW(d['yoy_n'])}，{direction}）。"
@@ -120,7 +133,7 @@ def build_md(a, meta):
           '', '## 三、主题分布（人工确认后）', '']
     all_tops = sorted((t for d in dims for t in d['top_themes']), key=lambda t: -t['score'])[:10]
     L.append(md_table(['主题', '维度', '工单', '客户', 'IPC', '复合权重'],
-                      [[t['theme'], next(d['name'] for d in dims if t in d['top_themes']),
+                      [[disp(t), next(d['name'] for d in dims if t in d['top_themes']),
                         t['n'], t['cust'], t['ipc'], t['score']] for t in all_tops]))
     L += ['', '> 复合权重 = 工单量(×1.0) + IPC(×1.5) 归一化得分，奖励覆盖面广的问题。全部主题见 data/themes-final.yaml',
           '', '## 四、智能总结与改进建议', '', meta.get('insights') or INSIGHTS_PLACEHOLDER, '',
@@ -137,8 +150,10 @@ def build_md(a, meta):
         if d['top_themes']:
             L.append('**主要问题（主题 Top）+ 动作建议**：')
             for t in d['top_themes']:
-                L.append(f"- **{t['theme']}**（{t['n']} 单 / {t['cust']} 客户 / IPC {t['ipc']}）")
-                act = theme_actions.get(t['theme'], {}).get('action')
+                L.append(f"- **{disp(t)}**（{t['n']} 单 / {t['cust']} 客户 / IPC {t['ipc']}）")
+                for s in (t.get('sub') or []):        # 二级子主题
+                    L.append(f"  - └ 二级: {s['label']} — {s['n']} 单（占本主题 {s['n']/max(t['n'],1)*100:.0f}%）")
+                act = theme_actions.get(disp(t), {}).get('action')
                 if act:
                     L.append(f"  - 💡 动作建议: {act}")
                 for tk in t['typical'][:2]:
@@ -246,16 +261,21 @@ def build_html(a, meta):
     all_tops = sorted((dict(t, dim=d['name']) for d in dims for t in d['top_themes']),
                       key=lambda t: -t['score'])[:10]
     theme_table = h_table(['主题', '维度', '工单', '客户', 'IPC', '权重'],
-                          [[html.escape(t['theme']), t['dim'], t['n'], t['cust'], t['ipc'], t['score']]
+                          [[html.escape(disp(t)), t['dim'], t['n'], t['cust'], t['ipc'], t['score']]
                            for t in all_tops])
     theme_actions = parse_theme_actions(meta.get('insights'))
     secs = []
     for d in dims:
-        rows = []
+        rows, subtables = [], []
         for t in d['top_themes']:
             tk = '；'.join(f"{x['key']} {html.escape(x['summary'][:36])}" for x in t['typical'][:2])
-            act = html.escape(theme_actions.get(t['theme'], {}).get('action', '') or '—')
-            rows.append([html.escape(t['theme']), t['n'], t['cust'], t['ipc'], f'💡 {act}' if act != '—' else '—', tk])
+            act = html.escape(theme_actions.get(disp(t), {}).get('action', '') or '—')
+            rows.append([html.escape(disp(t)), t['n'], t['cust'], t['ipc'], f'💡 {act}' if act != '—' else '—', tk])
+            if t.get('sub'):        # 二级子主题 mini 表
+                subtables.append(f'<p style="margin:2px 0 2px 12px;font-size:13px"><b>「{html.escape(disp(t))}」二级主题</b></p>'
+                                 + '<div style="margin-left:12px">' + h_table(['二级主题', '工单', '客户', '占本主题'],
+                                   [[html.escape(s['label']), s['n'], s['cust'], f"{s['n']/max(t['n'],1)*100:.0f}%"]
+                                    for s in t['sub']]) + '</div>')
         kc = h_table(['客户', '工单', '主要问题'],
                      [[html.escape(c['customer']), c['n'], html.escape(' / '.join(c['top_themes']))]
                       for c in d['key_customers']]) if d['key_customers'] else ''
@@ -263,6 +283,7 @@ def build_html(a, meta):
         secs.append(f"<h3>{d['name']}维度（{d['cur']['n']:,} 单 · 同比 {h_arrow(d['yoy_n'])}）</h3>"
                     + f'<p class="note" style="background:#eef4ff;border-color:#2563eb">📌 <b>维度小结</b>：{summ}</p>'
                     + h_table(['主要问题', '工单', '客户', 'IPC', '动作建议', '典型代表'], rows)
+                    + (('<p style="margin-top:8px"><b>🔬 高量主题二级下钻</b></p>' + ''.join(subtables)) if subtables else '')
                     + (f'<p><b>重点客户</b></p>{kc}' if kc else ''))
     caveats = ''.join(f'<p class="note">⚠️ {html.escape(c)}</p>' for c in a['caveats']) or '<p>无特别口径警示。</p>'
     data = {'months': [m['month'] for m in a['monthly']],

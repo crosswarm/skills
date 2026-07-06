@@ -6,19 +6,71 @@
                        客开K=客开/API; 其他X=安全/运维/升级/环境/无效/未填写
 IPC = 工单数 ÷ 去重客户数（月度 IPC 用当月去重客户）
 """
-import argparse, csv, json, sys
+import argparse, csv, json, re, sys
 from collections import Counter, defaultdict
 from pathlib import Path
-from ti_common import read_state, stage_at_least, write_state
+import yaml
+from ti_common import read_state, stage_at_least, write_state, THEMES_DIR
 
 DIM_NAME = {'P': '产品', 'R': '研发', 'I': '实施', 'K': '客开', 'X': '其他'}
 DIMS = ['P', 'R', 'I', 'K', 'X']
+SUB_MIN_N = 100        # 触发二级下钻: 主题 ≥100 单 或
+SUB_MIN_SHARE = 0.15   #             ≥本维度 15%
+SUB_GROUP_MIN = 5      # 二级子群最小体量; 须能分出 ≥2 个才展示
+_NOISE = re.compile(r'【[^】]*】|https?://\S+')
 
 def load(p: Path):
     if not p.exists():
         return []
     with open(p, newline='', encoding='utf-8-sig') as fh:
         return list(csv.DictReader(fh))
+
+def load_subthemes(project: str) -> dict:
+    """themes/<PROJ>/sub-themes.yaml → {labels:{id:显示名}, sub_themes:{id:[{label,keywords}]}}"""
+    p = THEMES_DIR / project / 'sub-themes.yaml'
+    if not p.exists():
+        return {'labels': {}, 'sub_themes': {}}
+    doc = yaml.safe_load(p.read_text(encoding='utf-8')) or {}
+    return {'labels': doc.get('labels', {}) or {}, 'sub_themes': doc.get('sub_themes', {}) or {}}
+
+def subcluster(trs, subdefs):
+    """按子主题关键词顺序匹配主题工单; 返回 [{label,n,cust}], 未命中→其他(未细分); 守卫: ≥2个≥SUB_GROUP_MIN 才有效"""
+    groups, other = [], []
+    assigned = {}
+    for r in trs:
+        text = _NOISE.sub(' ', (r['summary'] or '') + ' ' + (r.get('solution') or '')).lower()
+        hit = None
+        for sd in subdefs:
+            if any(k.lower() in text for k in sd.get('keywords', [])):
+                hit = sd['label']; break
+        (assigned.setdefault(hit, []) if hit else other).append(r)
+    for sd in subdefs:
+        rs = assigned.get(sd['label'], [])
+        if rs:
+            groups.append({'label': sd['label'], 'n': len(rs),
+                           'cust': len({r['customer'] for r in rs if r['customer']})})
+    groups.sort(key=lambda g: -g['n'])
+    big = [g for g in groups if g['n'] >= SUB_GROUP_MIN]
+    if len(big) < 2:                       # 分不出 ≥2 个有意义子群 → 不下钻
+        return None
+    if other:
+        groups.append({'label': '其他(未细分)', 'n': len(other),
+                       'cust': len({r['customer'] for r in other if r['customer']})})
+    return groups
+
+_STOP = {'友户通', '麻烦老师', '老师您好', '老师', '谢谢', '您好', '帮忙看', '帮忙看下', '帮忙看看',
+         '请问', '如图', '问题', '这个', '需要', '为什么', '是否', '能否', '可以', '如何', '现在',
+         '附件', '截图', '客户', '请老师', '麻烦', '一下', '提示', '出现', '联系电话', '手机号'}
+def distinct_terms(trs, own_kws, topn=12):
+    """未定义 sub_themes 时给 Agent 的区分词频提示(剔除父主题关键词+礼貌噪音后的高频 2-4 字中文词)"""
+    own = {k.lower() for k in own_kws}
+    w = Counter()
+    for r in trs:
+        t = _NOISE.sub(' ', r['summary'] or '')
+        for tok in re.findall(r'[一-鿿]{2,4}', t):
+            if tok.lower() not in own and tok not in _STOP and len(tok) >= 2:
+                w[tok] += 1
+    return [t for t, _ in w.most_common(topn)]
 
 def stats(rows):
     custs = {r['customer'] for r in rows if r['customer']}
@@ -31,6 +83,20 @@ def yoy(cur, prev):
 def analyze(wd: Path):
     # v1.1 状态校验: 须完成主题确认(finalize)才可分析; 同级/更早重入允许, 只拦跳级
     st = read_state(wd)
+    project = st.get('project') or ''
+    if not project:                    # 兜底: 从 workdir 名 ticket-insight-<PROJ>-<label> 推断
+        m = re.match(r'ticket-insight-([A-Z0-9]+)-', Path(wd).name)
+        project = m.group(1) if m else ''
+    sub_cfg = load_subthemes(project)
+    labels, sub_defs_all = sub_cfg['labels'], sub_cfg['sub_themes']
+    try:
+        import ti_themes
+        _ts = ti_themes.ThemeSets(project) if project else None
+        theme_kws = {tid: kws for _, rules in ((None, _ts.p), (None, _ts.i), (None, _ts.k), (None, _ts.r_fb))
+                     for tid, kws in rules} if _ts else {}
+    except Exception:
+        theme_kws = {}
+    pending_sub = []
     if not stage_at_least(st.get('stage'), 'confirmed'):
         print(f"❌ 当前阶段={st.get('stage') or '未知'}，主题尚未确认固化。")
         print('   发生了什么: 分析要求主题结构先经人工确认(--finalize)，防止未确认数据进入报告。')
@@ -100,8 +166,18 @@ def analyze(wd: Path):
                                 'solution_brief': (r.get('solution') or '')[:90]})
                 if len(typical) == 3:
                     break
-            dim['top_themes'].append({'theme': t['theme'], 'n': t['n'], 'cust': t['cust'],
-                                      'ipc': t['ipc'], 'score': t['score'], 'typical': typical})
+            entry = {'theme': t['theme'], 'label': labels.get(t['theme'], t['theme']),
+                     'n': t['n'], 'cust': t['cust'], 'ipc': t['ipc'], 'score': t['score'],
+                     'typical': typical, 'sub': None}
+            # 二级下钻: 主题 ≥100 单 或 ≥本维度15%
+            if t['n'] >= SUB_MIN_N or t['n'] >= SUB_MIN_SHARE * max(sc_d['n'], 1):
+                subdefs = sub_defs_all.get(t['theme'])
+                if subdefs:
+                    entry['sub'] = subcluster(trs, subdefs)
+                else:
+                    pending_sub.append({'theme': t['theme'], 'dim': d, 'n': t['n'],
+                                        'hint_terms': distinct_terms(trs, theme_kws.get(t['theme'], []))})
+            dim['top_themes'].append(entry)
         # 重点客户 Top5（维度内）
         cc = Counter(r['customer'] for r in rc if r['customer'])
         dim['key_customers'] = []
@@ -130,6 +206,7 @@ def analyze(wd: Path):
     if x and sc['n'] and x['cur']['n'] / sc['n'] > 0.03:
         out['caveats'].append(f'"其他"维度占比 {x["cur"]["n"]/sc["n"]*100:.1f}% 超过 3% 目标，原因与处置见主题门禁记录。')
 
+    out['pending_subtheme'] = pending_sub
     (wd / 'data' / 'analysis.json').write_text(json.dumps(out, ensure_ascii=False, indent=1), encoding='utf-8')
     # CSV 产物
     with open(wd / 'data' / 'dimension_summary.csv', 'w', newline='', encoding='utf-8-sig') as fh:
@@ -152,6 +229,14 @@ def analyze(wd: Path):
         for c in out['key_customers']:
             w.writerow([c['customer'], c['n'], ' / '.join(c['dims']), ' / '.join(c['top_themes'])])
     write_state(wd, stage='analyzed')
+    if pending_sub:
+        print(f'📐 {len(pending_sub)} 个高量主题待二级下钻（≥100单或≥15%，未定义子主题）：')
+        for p in pending_sub:
+            print(f"    {p['dim']} {p['theme']}（{p['n']}单）区分词: {'、'.join(p['hint_terms'][:8])}")
+        print(f'    → 由 Claude 按提示起草 themes/{project}/sub-themes.yaml 的 labels+sub_themes 后重跑分析')
+    has_sub = sum(1 for dm in out['dimensions'] for t in dm.get('top_themes', []) if t.get('sub'))
+    if has_sub:
+        print(f'📐 已完成 {has_sub} 个主题的二级下钻')
     print(f"✓ 分析完成: 总量 {sc['n']:,}(同比{out['overall']['yoy_n']}%) · IPC {sc['ipc']}(同比{out['overall']['yoy_ipc']}%)"
           f" · 维度 {len(out['dimensions'])} 个 → analysis.json + 3 个 CSV")
     print('→ 下一步: 由 Claude 按 references/insights-template.md 协议撰写 data/insights.md(智能总结), 再生成报告')

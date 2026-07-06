@@ -111,7 +111,12 @@ python3 scripts/ti_analyze.py --workdir <WD>
 ```
 产出 analysis.json + 3 个 CSV（要求主题已 finalize，否则 exit 5）。完成小结报：总量/同比、IPC/同比、恶化维度。
 
-**S3.5 智能总结（必做）**：分析完成后，你(Claude)按 `references/insights-template.md` 协议撰写 `<WD>/data/insights.md`——四节固定结构（诊断结论/改进措施/预期整体效果/风险与注意）。铁律：只引用 analysis.json 里真实存在的主题名与数字（ti_report 会校验，未知主题名→阻断）；预期效果=基数×参考压降率并**标注估算**；连接了知识库则结合背景细化并标注来源文档；简体中文。
+**S3.3 二级主题下钻 + 主题命名（必做）**：`ti_analyze` 输出会列出 `pending_subtheme`（≥100单或≥本维度15% 的高量主题，附区分词提示）。你(Claude)据此编辑 `themes/<PROJ>/sub-themes.yaml`：
+- `labels`：给**报告中出现的一级主题**（各维度 Top5 + all_tops）起**清晰易懂的显示名**——现有 id 如 `I-流程设计-分支条件` 太机械。命名规则：**别太简洁看不明白，也别复杂不易懂**（如 `审批流分支条件配置`、`审批找人/选人规则`）。
+- `sub_themes`：给每个 `pending_subtheme` 主题起 3-6 个**二级子主题**（label + keywords，来自该主题工单标题的真实痛点词，顺序=匹配优先级），二级名同样清晰易懂。
+- 编辑后**重跑 `ti_analyze`**（算出二级分布）；`ti_analyze` 会报"已完成 N 个主题二级下钻"。子主题分不出 ≥2 个 ≥5 单的群则自动不下钻（正常）。
+
+**S3.5 智能总结（必做）**：分析完成后，你(Claude)按 `references/insights-template.md` 协议撰写 `<WD>/data/insights.md`（主题名用你在 labels 里起的**友好显示名**，与报告一致）——四节固定结构（诊断结论/改进措施/预期整体效果/风险与注意）。铁律：只引用 analysis.json 里真实存在的主题名与数字（ti_report 会校验，未知主题名→阻断）；预期效果=基数×参考压降率并**标注估算**；连接了知识库则结合背景细化并标注来源文档；简体中文。
 
 ### S4 报告生成
 ```bash
