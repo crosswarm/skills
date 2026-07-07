@@ -10,8 +10,9 @@
 """
 import argparse, csv, hashlib, json, pickle, shutil, sys, time
 from pathlib import Path
-from ti_common import (CACHE_DIR, banner, build_jql, fmt_secs, get_cookie, jira_get, workdir,
-                       clear_active, get_active, read_state, set_active, stage_at_least, write_state)
+from ti_common import (CACHE_DIR, banner, build_jql, fmt_secs, get_cookie, jira_get, project_cn,
+                       workdir, clear_active, get_active, read_state, set_active, stage_at_least,
+                       write_state)
 
 FIELDS_VER = 'v1'
 FIELDS = ('summary,created,status,resolution,assignee,'
@@ -76,6 +77,18 @@ def prev_year(d: str) -> str:
     y, rest = d.split('-', 1)
     return f'{int(y)-1}-{rest}'
 
+def fetch_project_name(project: str, cookie: str) -> str | None:
+    """/rest/api/2/project/<key> 取中文名并剥离"云平台-"前缀（供报告大标题）；失败回退 None"""
+    try:
+        d = jira_get(f'/rest/api/2/project/{project}', {}, cookie)
+        name = (d.get('name') or '').strip()
+        for pre in ('云平台-', '云平台 '):
+            if name.startswith(pre):
+                name = name[len(pre):].strip()
+        return name or None
+    except Exception:
+        return None
+
 def cmd_abort_active():
     """仅当用户明确说「终止当前分析」时调用（SKILL.md 协议约束）"""
     act = get_active()
@@ -139,7 +152,8 @@ if __name__ == '__main__':
         out['prev'] = {'n': len(prev), 'csv': str(p_prev)}
     out['workdir'] = str(wd)
     scope = f'{a.project} · {a.start}~{a.end}' + (f' · {a.domain}' + (f'/{a.sub}' if a.sub else '') if a.domain else '')
-    write_state(wd, stage='fetched', project=a.project, label=label, scope=scope,
+    proj_cn = project_cn(a.project, fetch_project_name(a.project, cookie))   # 报告大标题用中文名
+    write_state(wd, stage='fetched', project=a.project, project_name=proj_cn, label=label, scope=scope,
                 fetch_ts=time.strftime('%Y-%m-%d %H:%M:%S'),
                 counts={'cur': out['cur']['n'], 'prev': out.get('prev', {}).get('n')})
     set_active(wd, a.project, 'fetched')

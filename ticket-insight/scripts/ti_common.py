@@ -24,6 +24,21 @@ _CTX = ssl.create_default_context(); _CTX.check_hostname = False; _CTX.verify_mo
 
 DEFAULT_BASE = 'https://gfjira.yyrd.com'
 
+# ── 项目 key → 中文名（报告大标题用；ti_fetch 会用 Jira 实时名覆盖，此为兜底）──────
+PROJ_CN = {
+    'LCZX': '流程中心', 'YWZT': '消息平台', 'YDY': '云打印', 'AI': '大模型平台',
+    'AIIM': '智能机器人', 'DDMPT': 'YonBuilder', 'ESB': '云ESB', 'GGJS': '公共技术',
+    'HXDA': '核心档案', 'JCDA': '基础档案', 'KFPT': 'YonLinker', 'LDM': '零代码',
+    'QDKJ': '前端框架', 'VPA': '智能体', 'XC': '信创适配', 'YHT': '友户通',
+    'YMS': '中间件', 'YYZJ': '应用框架', 'ZSJ': '主数据',
+}
+
+def project_cn(key: str, fetched: str = None) -> str:
+    """项目中文名：Jira 实时名(fetched, 已剥前缀)优先 → 内建表 → 回退 key"""
+    if fetched:
+        return fetched
+    return PROJ_CN.get((key or '').upper(), key or '')
+
 # ── 领域模块(cf10123) seed 甄别：技术分层类无业务主题意义，不采纳为 seed ──────────
 # 规则：cf10123 的领域/子模块【只做主题 seed（候选命名/关键词来源）】，绝不按字段值直接绑定工单。
 # 这些是"技术分层/非业务"分类，出现在领域或子模块名里 → 该项 seed 丢弃（工单仍按标题聚类，不受影响）。

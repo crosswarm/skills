@@ -1,69 +1,8 @@
 project: YDY
-version: '2026-07-06'
+version: '2026-07-07'
 description: 用户确认主题库(优先于种子与auto加载; 同id完全替换后者)
 leaf_themes:
-- id: P-凭证/账表打印
-  dimension: P
-  keywords:
-  - 凭证打印
-  - 总账凭证
-  - 科目余额
-  - 明细账
-  - 账簿打印
-  - 账表
-  - 凭证预览
-  - 凭证套打
-  - 打印凭证
-  source: user-confirmed
-  confirmed_at: '2026-07-06'
-- id: P-套打/纸张/打印机
-  dimension: P
-  keywords:
-  - 套打
-  - 自定义纸张
-  - 纸张大小
-  - 打印机
-  - 默认打印机
-  - 页边距
-  - 纸张
-  source: user-confirmed
-  confirmed_at: '2026-07-06'
-- id: P-批量打印/打印助手
-  dimension: P
-  keywords:
-  - 批量打印
-  - 批量勾选
-  - 打印助手
-  - 云助手
-  - 用友云助手
-  - 云盒
-  - 批量打印时
-  source: user-confirmed
-  confirmed_at: '2026-07-06'
-- id: P-单据及附件打印
-  dimension: P
-  keywords:
-  - 单据及附件
-  - 打印附件
-  - 附件打印
-  - 及附件
-  source: user-confirmed
-  confirmed_at: '2026-07-06'
-- id: P-模板-导出Word/Excel/PDF
-  dimension: P
-  keywords:
-  - 导出word
-  - 导出为word
-  - 导出excel
-  - 输出excel
-  - 导出样式
-  - exsl导出
-  - 导出为pdf
-  - 导出格式
-  - word格式
-  source: user-confirmed
-  confirmed_at: '2026-07-06'
-- id: P-模板-字段取值/公式
+- id: P-模板字段取值与格式
   dimension: P
   keywords:
   - 取值
@@ -82,11 +21,6 @@ leaf_themes:
   - 特征字段
   - 显示不出
   - 取到
-  source: user-confirmed
-  confirmed_at: '2026-07-06'
-- id: P-模板-数值/金额格式
-  dimension: P
-  keywords:
   - 小数
   - 位数
   - 税率
@@ -99,8 +33,8 @@ leaf_themes:
   - 数量
   - 小数点
   source: user-confirmed
-  confirmed_at: '2026-07-06'
-- id: P-模板-布局/排版
+  confirmed_at: '2026-07-07'
+- id: P-模板布局与子表排版
   dimension: P
   keywords:
   - 间距
@@ -118,11 +52,6 @@ leaf_themes:
   - 换行
   - 表格线
   - 线条
-  source: user-confirmed
-  confirmed_at: '2026-07-06'
-- id: P-模板-子表/表体
-  dimension: P
-  keywords:
   - 子表
   - 表体
   - 明细行
@@ -132,8 +61,8 @@ leaf_themes:
   - 子表格
   - 明细
   source: user-confirmed
-  confirmed_at: '2026-07-06'
-- id: P-模板-图片/条码/签章
+  confirmed_at: '2026-07-07'
+- id: P-模板元素与审批流显示
   dimension: P
   keywords:
   - 图片打印
@@ -145,11 +74,6 @@ leaf_themes:
   - 签章
   - 图片只能
   - 印章
-  source: user-confirmed
-  confirmed_at: '2026-07-06'
-- id: P-模板-审批历史/流程
-  dimension: P
-  keywords:
   - 审批历史
   - 审批意见
   - 审批流
@@ -158,10 +82,61 @@ leaf_themes:
   - 代理审批
   - 审批节点
   source: user-confirmed
-  confirmed_at: '2026-07-06'
-- id: P-打印预览/输出报错
+  confirmed_at: '2026-07-07'
+- id: P-套打纸张与打印机
   dimension: P
   keywords:
+  - 套打
+  - 自定义纸张
+  - 纸张大小
+  - 打印机
+  - 默认打印机
+  - 页边距
+  - 纸张
+  source: user-confirmed
+  confirmed_at: '2026-07-07'
+- id: P-凭证账表与票据打印
+  dimension: P
+  keywords:
+  - 凭证打印
+  - 总账凭证
+  - 科目余额
+  - 明细账
+  - 账簿打印
+  - 账表
+  - 凭证预览
+  - 凭证套打
+  - 打印凭证
+  - 单据及附件
+  - 打印附件
+  - 附件打印
+  - 及附件
+  source: user-confirmed
+  confirmed_at: '2026-07-07'
+- id: P-批量打印与打印助手
+  dimension: P
+  keywords:
+  - 批量打印
+  - 批量勾选
+  - 打印助手
+  - 云助手
+  - 用友云助手
+  - 云盒
+  - 批量打印时
+  source: user-confirmed
+  confirmed_at: '2026-07-07'
+- id: P-打印输出报错与导出
+  dimension: P
+  keywords:
+  - 导出word
+  - 导出为word
+  - 导出excel
+  - 输出excel
+  - 导出样式
+  - exsl导出
+  - 导出为pdf
+  - 导出格式
+  - word格式
   - 预览报错
   - 打印报错
   - pdf打印
@@ -177,17 +152,12 @@ leaf_themes:
   - 打印失败
   - 打印异常
   - 预览没有值
-  source: user-confirmed
-  confirmed_at: '2026-07-06'
-- id: P-打印次数/日志
-  dimension: P
-  keywords:
   - 打印次数
   - 打印日志
   - 打印记录
   source: user-confirmed
-  confirmed_at: '2026-07-06'
-- id: P-云打印安装/驱动/部署
+  confirmed_at: '2026-07-07'
+- id: P-安装部署与客开打印
   dimension: P
   keywords:
   - 安装
@@ -198,11 +168,6 @@ leaf_themes:
   - 客户端
   - 控件下载
   - 插件
-  source: user-confirmed
-  confirmed_at: '2026-07-06'
-- id: P-零代码/客开单据打印
-  dimension: P
-  keywords:
   - 零代码
   - 客开按钮
   - 自定义单据
@@ -210,8 +175,8 @@ leaf_themes:
   - 低代码
   - 应用构建
   source: user-confirmed
-  confirmed_at: '2026-07-06'
-- id: P-模板-通用配置咨询
+  confirmed_at: '2026-07-07'
+- id: P-模板通用配置咨询
   dimension: P
   keywords:
   - 打印模板
@@ -219,8 +184,8 @@ leaf_themes:
   - 模板
   - 模版
   source: user-confirmed
-  confirmed_at: '2026-07-06'
-- id: P-其他打印问题
+  confirmed_at: '2026-07-07'
+- id: P-打印兼容性与杂项
   dimension: P
   keywords:
   - 打印
@@ -228,77 +193,8 @@ leaf_themes:
   - 预览
   - 打
   source: user-confirmed
-  confirmed_at: '2026-07-06'
-- id: I-凭证/账表打印
-  dimension: I
-  keywords:
-  - 凭证打印
-  - 总账凭证
-  - 科目余额
-  - 明细账
-  - 账簿打印
-  - 账表
-  - 凭证预览
-  - 凭证套打
-  - 打印凭证
-  source: user-confirmed
-  confirmed_at: '2026-07-06'
-- id: I-发票打印
-  dimension: I
-  keywords:
-  - 发票打印
-  - 打印发票
-  - 增值税发票
-  source: user-confirmed
-  confirmed_at: '2026-07-06'
-- id: I-套打/纸张/打印机
-  dimension: I
-  keywords:
-  - 套打
-  - 自定义纸张
-  - 纸张大小
-  - 打印机
-  - 默认打印机
-  - 页边距
-  - 纸张
-  source: user-confirmed
-  confirmed_at: '2026-07-06'
-- id: I-批量打印/打印助手
-  dimension: I
-  keywords:
-  - 批量打印
-  - 批量勾选
-  - 打印助手
-  - 云助手
-  - 用友云助手
-  - 云盒
-  - 批量打印时
-  source: user-confirmed
-  confirmed_at: '2026-07-06'
-- id: I-单据及附件打印
-  dimension: I
-  keywords:
-  - 单据及附件
-  - 打印附件
-  - 附件打印
-  - 及附件
-  source: user-confirmed
-  confirmed_at: '2026-07-06'
-- id: I-模板-导出Word/Excel/PDF
-  dimension: I
-  keywords:
-  - 导出word
-  - 导出为word
-  - 导出excel
-  - 输出excel
-  - 导出样式
-  - exsl导出
-  - 导出为pdf
-  - 导出格式
-  - word格式
-  source: user-confirmed
-  confirmed_at: '2026-07-06'
-- id: I-模板-字段取值/公式
+  confirmed_at: '2026-07-07'
+- id: I-模板字段取值与格式
   dimension: I
   keywords:
   - 取值
@@ -317,11 +213,6 @@ leaf_themes:
   - 特征字段
   - 显示不出
   - 取到
-  source: user-confirmed
-  confirmed_at: '2026-07-06'
-- id: I-模板-数值/金额格式
-  dimension: I
-  keywords:
   - 小数
   - 位数
   - 税率
@@ -334,8 +225,8 @@ leaf_themes:
   - 数量
   - 小数点
   source: user-confirmed
-  confirmed_at: '2026-07-06'
-- id: I-模板-布局/排版
+  confirmed_at: '2026-07-07'
+- id: I-模板布局与子表排版
   dimension: I
   keywords:
   - 间距
@@ -353,11 +244,6 @@ leaf_themes:
   - 换行
   - 表格线
   - 线条
-  source: user-confirmed
-  confirmed_at: '2026-07-06'
-- id: I-模板-子表/表体
-  dimension: I
-  keywords:
   - 子表
   - 表体
   - 明细行
@@ -367,8 +253,8 @@ leaf_themes:
   - 子表格
   - 明细
   source: user-confirmed
-  confirmed_at: '2026-07-06'
-- id: I-模板-图片/条码/签章
+  confirmed_at: '2026-07-07'
+- id: I-模板元素与审批流显示
   dimension: I
   keywords:
   - 图片打印
@@ -380,11 +266,6 @@ leaf_themes:
   - 签章
   - 图片只能
   - 印章
-  source: user-confirmed
-  confirmed_at: '2026-07-06'
-- id: I-模板-审批历史/流程
-  dimension: I
-  keywords:
   - 审批历史
   - 审批意见
   - 审批流
@@ -393,10 +274,64 @@ leaf_themes:
   - 代理审批
   - 审批节点
   source: user-confirmed
-  confirmed_at: '2026-07-06'
-- id: I-打印预览/输出报错
+  confirmed_at: '2026-07-07'
+- id: I-套打纸张与打印机
   dimension: I
   keywords:
+  - 套打
+  - 自定义纸张
+  - 纸张大小
+  - 打印机
+  - 默认打印机
+  - 页边距
+  - 纸张
+  source: user-confirmed
+  confirmed_at: '2026-07-07'
+- id: I-凭证账表与票据打印
+  dimension: I
+  keywords:
+  - 凭证打印
+  - 总账凭证
+  - 科目余额
+  - 明细账
+  - 账簿打印
+  - 账表
+  - 凭证预览
+  - 凭证套打
+  - 打印凭证
+  - 发票打印
+  - 打印发票
+  - 增值税发票
+  - 单据及附件
+  - 打印附件
+  - 附件打印
+  - 及附件
+  source: user-confirmed
+  confirmed_at: '2026-07-07'
+- id: I-批量打印与打印助手
+  dimension: I
+  keywords:
+  - 批量打印
+  - 批量勾选
+  - 打印助手
+  - 云助手
+  - 用友云助手
+  - 云盒
+  - 批量打印时
+  source: user-confirmed
+  confirmed_at: '2026-07-07'
+- id: I-打印输出报错与导出
+  dimension: I
+  keywords:
+  - 导出word
+  - 导出为word
+  - 导出excel
+  - 输出excel
+  - 导出样式
+  - exsl导出
+  - 导出为pdf
+  - 导出格式
+  - word格式
   - 预览报错
   - 打印报错
   - pdf打印
@@ -412,19 +347,9 @@ leaf_themes:
   - 打印失败
   - 打印异常
   - 预览没有值
-  source: user-confirmed
-  confirmed_at: '2026-07-06'
-- id: I-打印次数/日志
-  dimension: I
-  keywords:
   - 打印次数
   - 打印日志
   - 打印记录
-  source: user-confirmed
-  confirmed_at: '2026-07-06'
-- id: I-打印性能/慢
-  dimension: I
-  keywords:
   - 打印很慢
   - 打印慢
   - 加载慢
@@ -432,8 +357,8 @@ leaf_themes:
   - 速度慢
   - 导出慢
   source: user-confirmed
-  confirmed_at: '2026-07-06'
-- id: I-云打印安装/驱动/部署
+  confirmed_at: '2026-07-07'
+- id: I-安装部署与客开打印
   dimension: I
   keywords:
   - 安装
@@ -444,11 +369,6 @@ leaf_themes:
   - 客户端
   - 控件下载
   - 插件
-  source: user-confirmed
-  confirmed_at: '2026-07-06'
-- id: I-零代码/客开单据打印
-  dimension: I
-  keywords:
   - 零代码
   - 客开按钮
   - 自定义单据
@@ -456,8 +376,8 @@ leaf_themes:
   - 低代码
   - 应用构建
   source: user-confirmed
-  confirmed_at: '2026-07-06'
-- id: I-打印权限/模板管理
+  confirmed_at: '2026-07-07'
+- id: I-模板通用配置咨询
   dimension: I
   keywords:
   - 打印权限
@@ -467,18 +387,13 @@ leaf_themes:
   - 模板下发
   - 集团级
   - 组织级模板
-  source: user-confirmed
-  confirmed_at: '2026-07-06'
-- id: I-模板-通用配置咨询
-  dimension: I
-  keywords:
   - 打印模板
   - 打印模版
   - 模板
   - 模版
   source: user-confirmed
-  confirmed_at: '2026-07-06'
-- id: I-其他打印问题
+  confirmed_at: '2026-07-07'
+- id: I-打印兼容性与杂项
   dimension: I
   keywords:
   - 打印
@@ -486,69 +401,8 @@ leaf_themes:
   - 预览
   - 打
   source: user-confirmed
-  confirmed_at: '2026-07-06'
-- id: K-凭证/账表打印
-  dimension: K
-  keywords:
-  - 凭证打印
-  - 总账凭证
-  - 科目余额
-  - 明细账
-  - 账簿打印
-  - 账表
-  - 凭证预览
-  - 凭证套打
-  - 打印凭证
-  source: user-confirmed
-  confirmed_at: '2026-07-06'
-- id: K-套打/纸张/打印机
-  dimension: K
-  keywords:
-  - 套打
-  - 自定义纸张
-  - 纸张大小
-  - 打印机
-  - 默认打印机
-  - 页边距
-  - 纸张
-  source: user-confirmed
-  confirmed_at: '2026-07-06'
-- id: K-批量打印/打印助手
-  dimension: K
-  keywords:
-  - 批量打印
-  - 批量勾选
-  - 打印助手
-  - 云助手
-  - 用友云助手
-  - 云盒
-  - 批量打印时
-  source: user-confirmed
-  confirmed_at: '2026-07-06'
-- id: K-单据及附件打印
-  dimension: K
-  keywords:
-  - 单据及附件
-  - 打印附件
-  - 附件打印
-  - 及附件
-  source: user-confirmed
-  confirmed_at: '2026-07-06'
-- id: K-模板-导出Word/Excel/PDF
-  dimension: K
-  keywords:
-  - 导出word
-  - 导出为word
-  - 导出excel
-  - 输出excel
-  - 导出样式
-  - exsl导出
-  - 导出为pdf
-  - 导出格式
-  - word格式
-  source: user-confirmed
-  confirmed_at: '2026-07-06'
-- id: K-模板-字段取值/公式
+  confirmed_at: '2026-07-07'
+- id: K-模板字段取值与格式
   dimension: K
   keywords:
   - 取值
@@ -567,11 +421,6 @@ leaf_themes:
   - 特征字段
   - 显示不出
   - 取到
-  source: user-confirmed
-  confirmed_at: '2026-07-06'
-- id: K-模板-数值/金额格式
-  dimension: K
-  keywords:
   - 小数
   - 位数
   - 税率
@@ -584,8 +433,8 @@ leaf_themes:
   - 数量
   - 小数点
   source: user-confirmed
-  confirmed_at: '2026-07-06'
-- id: K-模板-布局/排版
+  confirmed_at: '2026-07-07'
+- id: K-模板布局与子表排版
   dimension: K
   keywords:
   - 间距
@@ -603,11 +452,6 @@ leaf_themes:
   - 换行
   - 表格线
   - 线条
-  source: user-confirmed
-  confirmed_at: '2026-07-06'
-- id: K-模板-子表/表体
-  dimension: K
-  keywords:
   - 子表
   - 表体
   - 明细行
@@ -617,8 +461,8 @@ leaf_themes:
   - 子表格
   - 明细
   source: user-confirmed
-  confirmed_at: '2026-07-06'
-- id: K-模板-图片/条码/签章
+  confirmed_at: '2026-07-07'
+- id: K-模板元素与审批流显示
   dimension: K
   keywords:
   - 图片打印
@@ -630,11 +474,6 @@ leaf_themes:
   - 签章
   - 图片只能
   - 印章
-  source: user-confirmed
-  confirmed_at: '2026-07-06'
-- id: K-模板-审批历史/流程
-  dimension: K
-  keywords:
   - 审批历史
   - 审批意见
   - 审批流
@@ -643,10 +482,61 @@ leaf_themes:
   - 代理审批
   - 审批节点
   source: user-confirmed
-  confirmed_at: '2026-07-06'
-- id: K-打印预览/输出报错
+  confirmed_at: '2026-07-07'
+- id: K-套打纸张与打印机
   dimension: K
   keywords:
+  - 套打
+  - 自定义纸张
+  - 纸张大小
+  - 打印机
+  - 默认打印机
+  - 页边距
+  - 纸张
+  source: user-confirmed
+  confirmed_at: '2026-07-07'
+- id: K-凭证账表与票据打印
+  dimension: K
+  keywords:
+  - 凭证打印
+  - 总账凭证
+  - 科目余额
+  - 明细账
+  - 账簿打印
+  - 账表
+  - 凭证预览
+  - 凭证套打
+  - 打印凭证
+  - 单据及附件
+  - 打印附件
+  - 附件打印
+  - 及附件
+  source: user-confirmed
+  confirmed_at: '2026-07-07'
+- id: K-批量打印与打印助手
+  dimension: K
+  keywords:
+  - 批量打印
+  - 批量勾选
+  - 打印助手
+  - 云助手
+  - 用友云助手
+  - 云盒
+  - 批量打印时
+  source: user-confirmed
+  confirmed_at: '2026-07-07'
+- id: K-打印输出报错与导出
+  dimension: K
+  keywords:
+  - 导出word
+  - 导出为word
+  - 导出excel
+  - 输出excel
+  - 导出样式
+  - exsl导出
+  - 导出为pdf
+  - 导出格式
+  - word格式
   - 预览报错
   - 打印报错
   - pdf打印
@@ -662,17 +552,12 @@ leaf_themes:
   - 打印失败
   - 打印异常
   - 预览没有值
-  source: user-confirmed
-  confirmed_at: '2026-07-06'
-- id: K-打印次数/日志
-  dimension: K
-  keywords:
   - 打印次数
   - 打印日志
   - 打印记录
   source: user-confirmed
-  confirmed_at: '2026-07-06'
-- id: K-零代码/客开单据打印
+  confirmed_at: '2026-07-07'
+- id: K-安装部署与客开打印
   dimension: K
   keywords:
   - 零代码
@@ -682,8 +567,8 @@ leaf_themes:
   - 低代码
   - 应用构建
   source: user-confirmed
-  confirmed_at: '2026-07-06'
-- id: K-模板-通用配置咨询
+  confirmed_at: '2026-07-07'
+- id: K-模板通用配置咨询
   dimension: K
   keywords:
   - 打印模板
@@ -691,8 +576,8 @@ leaf_themes:
   - 模板
   - 模版
   source: user-confirmed
-  confirmed_at: '2026-07-06'
-- id: K-其他打印问题
+  confirmed_at: '2026-07-07'
+- id: K-打印兼容性与杂项
   dimension: K
   keywords:
   - 打印
@@ -700,4 +585,4 @@ leaf_themes:
   - 预览
   - 打
   source: user-confirmed
-  confirmed_at: '2026-07-06'
+  confirmed_at: '2026-07-07'

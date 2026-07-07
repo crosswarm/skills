@@ -40,13 +40,14 @@ SSO_NOISE = re.compile(r'【(?:帐户|账户)分享链接】[^【]*?(?:https?://
                        r'|帐户分享链接[:：]?\s*https?://\S+|sso链接[:：]?\s*https?://\S+', re.I)
 URL_PAT = re.compile(r'https?://\S+')
 
-# ── 原则① 权威字段 cf10729 → 四维度（2026-07 口径调整, 见 memory 维度映射）
-#   产品P=需求/UE; 研发R=产品错误/数据错误/设计/效率; 实施I=实施/应用操作;
-#   客开K=客开/API; 其他X=安全/运维/升级/环境/无效/未填写
-DIM_MAP = {'需求问题': 'P', 'UE问题': 'P',
-           '产品错误': 'R', '数据错误': 'R', '设计问题': 'R', '效率问题': 'R',
+# ── 原则① 权威字段 cf10729 → 四维度（2026-07-07 口径再调整, 见 memory 维度映射）
+#   产品P=需求; 研发R=产品错误/数据错误/设计; 实施I=实施/应用操作;
+#   客开K=客开/API; 其他X=UE/效率/安全/运维/升级/环境/无效/未填写
+DIM_MAP = {'需求问题': 'P',
+           '产品错误': 'R', '数据错误': 'R', '设计问题': 'R',
            '实施问题': 'I', '应用操作': 'I',
            '客开问题': 'K', 'API问题': 'K',
+           'UE问题': 'X', '效率问题': 'X',
            '安全问题': 'X', '运维问题': 'X', '升级问题': 'X', '环境问题': 'X'}
 DIM_NAME = {'P': '产品', 'R': '研发', 'I': '实施', 'K': '客开', 'X': '其他'}
 
@@ -240,7 +241,10 @@ def run_classify(wd: Path, project: str):
     if un:
         with open(wd / 'data' / 'unclassified_cur.csv', 'w', newline='', encoding='utf-8-sig') as fh:
             w = csv.DictWriter(fh, fieldnames=list(un[0].keys())); w.writeheader(); w.writerows(un)
-    print(f'✓ 主题聚合完成: {len(themes)} 个主题 → themes_summary.json / theme_ticket_map_*.csv')
+    n_biz = len(biz_concepts(themes))
+    cnt_note = (f'  ⚠️ 业务概念 {n_biz} 个 > 上限 30，门禁③会拦，请合并长尾主题'
+                if n_biz > 30 else f'  (业务概念 {n_biz} 个，目标~20)')
+    print(f'✓ 主题聚合完成: {len(themes)} 个主题{cnt_note} → themes_summary.json / theme_ticket_map_*.csv')
     return out_all
 
 def cmd_sample(wd: Path, n: int):
@@ -298,6 +302,16 @@ def cmd_apply_edits(wd: Path, edits_path: str):
     acc_p.write_text(json.dumps(acc, ensure_ascii=False, indent=1), encoding='utf-8')
     print(f'✓ 修订已应用: rename×{len(ren)} merge×{len(mrg)} assign×{len(asg)}; 请重跑 --workdir ... --project ... 刷新汇总')
 
+THEME_COUNT_CAP = 30       # 业务主题(概念)数量上限(目标~20); 非特殊情况不得超过, 超则须合并长尾
+
+def _concept(theme: str) -> str:
+    """概念归一: R- 镜像主题归到其 P- 概念(R-X 由 P-X 动态派生, 同一问题概念不重复计数)"""
+    return ('P-' + theme[2:]) if theme.startswith('R-') else theme
+
+def biz_concepts(themes) -> set:
+    """业务主题去重概念集(排除 未归类 + X 维度; R 镜像并入 P 概念)"""
+    return {_concept(t['theme']) for t in themes if not t['theme'].endswith('未归类') and t['dim'] != 'X'}
+
 def cmd_gate(wd: Path):
     doc = json.loads((wd / 'data' / 'themes_summary.json').read_text(encoding='utf-8'))
     s = doc['stats']['cur']
@@ -305,18 +319,25 @@ def cmd_gate(wd: Path):
     # 其他(X)维度现含安全/运维/升级/环境等合法业务类, 不再对"其他占比"硬拦; 只保未归类率≤3%
     ok_uncls = s['uncls_pct'] <= 3.0
     ok_agg = not overagg
+    n_biz = len(biz_concepts(doc['themes']))   # 概念数(R镜像并入P)
+    ok_cnt = n_biz <= THEME_COUNT_CAP
     print(f'门禁① 覆盖率: 主题未归类 {s["uncls_pct"]}% / 阈值 3% → '
           f'{"✅" if ok_uncls else "❌"}   (其他维度 {s["other_pct"]}% 仅供参考, 含安全/运维/升级/环境等合法类)')
     print(f'门禁② 过度聚合: {len(overagg)} 个主题占其维度 >{OVERAGG_SHARE*100:.0f}% → '
           f'{"✅ 无" if ok_agg else "❌ 须再拆"}')
     for o in overagg:
         print(f'      {o["dim"]} {o["theme"]}: {o["dim_share_pct"]}%')
-    if not (ok_uncls and ok_agg):
+    print(f'门禁③ 主题数量: {n_biz} 个业务概念(R镜像并入P) / 上限 {THEME_COUNT_CAP}(目标~20) → '
+          f'{"✅" if ok_cnt else "❌ 须合并长尾"}')
+    if not (ok_uncls and ok_agg and ok_cnt):
         if not ok_uncls:
             print('→ 覆盖率处置: ①LLM 补聚(写 themes-auto.yaml 重跑) ②确认闸口人工指定 ③用户显式豁免(记入口径)')
         if not ok_agg:
             print('→ 过度聚合处置: `--overagg` 看该主题样本标题 → 拆成更细叶级主题(改 themes-auto.yaml)重跑；'
                   '过度聚合=人工未细分, 不得直接放行(除非用户显式豁免)')
+        if not ok_cnt:
+            print(f'→ 数量处置: 把最小的长尾主题(见 --batches 的 tail)用 edits merge 合并到一个业务命名的聚合'
+                  f'主题(禁"其他"), 重跑聚合; 目标收敛到 ~20, 上限 {THEME_COUNT_CAP}。')
         sys.exit(3)
 
 def cmd_overagg(wd: Path, project: str):

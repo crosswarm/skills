@@ -2,8 +2,8 @@
 """ticket-insight S3 四维度分析
 输入: workdir/data/theme_ticket_map_{cur,prev}.csv
 输出: analysis.json + dimension_summary.csv + dimension_monthly.csv + key_customers.csv
-维度口径(2026-07调整): 产品P=需求/UE; 研发R=产品错误/数据错误/设计/效率; 实施I=实施/应用操作;
-                       客开K=客开/API; 其他X=安全/运维/升级/环境/无效/未填写
+维度口径(2026-07-07调整): 产品P=需求; 研发R=产品错误/数据错误/设计; 实施I=实施/应用操作;
+                       客开K=客开/API; 其他X=UE/效率/安全/运维/升级/环境/无效/未填写
 IPC = 工单数 ÷ 去重客户数（月度 IPC 用当月去重客户）
 """
 import argparse, csv, json, re, sys
@@ -14,6 +14,11 @@ from ti_common import read_state, stage_at_least, write_state, THEMES_DIR
 
 DIM_NAME = {'P': '产品', 'R': '研发', 'I': '实施', 'K': '客开', 'X': '其他'}
 DIMS = ['P', 'R', 'I', 'K', 'X']
+# 每维度智能建议须覆盖的最小工单占比: top 主题按 n 贪心取到累计≥此值, 余下并成"长尾合并"
+COVER_TARGET = 0.75
+COVER_MIN_THEMES = 3   # 至少取 top3 命名主题(哪怕已达标)
+COVER_MAX_THEMES = 8   # 至多取 top8(防止逐条列长尾)
+# ── [二级主题下钻] 2026-07-07 用户要求暂禁; 常量/函数保留为死代码, 待启用时恢复调用点 ──
 SUB_MIN_N = 100        # 触发二级下钻: 主题 ≥100 单 或
 SUB_MIN_SHARE = 0.15   #             ≥本维度 15%
 SUB_GROUP_MIN = 5      # 二级子群最小体量; 须能分出 ≥2 个才展示
@@ -34,7 +39,7 @@ def load_subthemes(project: str) -> dict:
     return {'labels': doc.get('labels', {}) or {}, 'sub_themes': doc.get('sub_themes', {}) or {}}
 
 def subcluster(trs, subdefs):
-    """按子主题关键词顺序匹配主题工单; 返回 [{label,n,cust}], 未命中→其他(未细分); 守卫: ≥2个≥SUB_GROUP_MIN 才有效"""
+    """[二级下钻·2026-07-07暂禁] 按子主题关键词顺序匹配主题工单; 返回 [{label,n,cust}], 守卫≥2个≥SUB_GROUP_MIN。当前无调用点。"""
     groups, other = [], []
     assigned = {}
     for r in trs:
@@ -100,15 +105,7 @@ def analyze(wd: Path):
         m = re.match(r'ticket-insight-([A-Z0-9]+)-', Path(wd).name)
         project = m.group(1) if m else ''
     sub_cfg = load_subthemes(project)
-    labels, sub_defs_all = sub_cfg['labels'], sub_cfg['sub_themes']
-    try:
-        import ti_themes
-        _ts = ti_themes.ThemeSets(project) if project else None
-        theme_kws = {tid: kws for _, rules in ((None, _ts.p), (None, _ts.i), (None, _ts.k), (None, _ts.r_fb))
-                     for tid, kws in rules} if _ts else {}
-    except Exception:
-        theme_kws = {}
-    pending_sub = []
+    labels = sub_cfg['labels']          # 一级主题友好显示名(保留); sub_themes 二级下钻暂禁不用
     if not stage_at_least(st.get('stage'), 'confirmed'):
         print(f"❌ 当前阶段={st.get('stage') or '未知'}，主题尚未确认固化。")
         print('   发生了什么: 分析要求主题结构先经人工确认(--finalize)，防止未确认数据进入报告。')
@@ -160,9 +157,17 @@ def analyze(wd: Path):
                'yoy_n': yoy(sc_d['n'], sp_d['n']), 'yoy_cust': yoy(sc_d['cust'], sp_d['cust']),
                'yoy_ipc': yoy(sc_d['ipc'], sp_d['ipc']),
                'monthly': [{'month': m, 'n': sum(1 for r in by_m[m] if r['dim'] == d)} for m in months]}
-        # 主要问题 = 维度内主题 Top5（IPC 复合权重 score 排序）
-        tops = sorted((t for t in themes_doc['themes'] if t['dim'] == d and not t['theme'].endswith('未归类')),
-                      key=lambda t: -t['score'])[:5]
+        # 主要问题 = 维度内主题, 按 n 降序贪心取到累计覆盖 ≥COVER_TARGET(min3/max8);
+        # 覆盖集之外并成"长尾合并"(dim['tail'])——供智能总结用一条 Agent 业务命名的合并主题分析(禁"其他")
+        dim_themes = sorted((t for t in themes_doc['themes'] if t['dim'] == d and not t['theme'].endswith('未归类')),
+                            key=lambda t: -t['n'])
+        cov_n, tops, rest = 0, [], []
+        for t in dim_themes:
+            take = len(tops) < COVER_MAX_THEMES and (len(tops) < COVER_MIN_THEMES
+                                                     or cov_n < COVER_TARGET * max(sc_d['n'], 1))
+            (tops if take else rest).append(t)
+            if take:
+                cov_n += t['n']
         dim['top_themes'] = []
         for t in tops:
             trs = [r for r in rc if r['theme'] == t['theme']]
@@ -180,23 +185,18 @@ def analyze(wd: Path):
                     break
             entry = {'theme': t['theme'], 'label': labels.get(t['theme'], t['theme']),
                      'n': t['n'], 'cust': t['cust'], 'ipc': t['ipc'], 'score': t['score'],
-                     'typical': typical, 'sub': None}
-            # 二级下钻: 主题 ≥100 单 或 ≥本维度15%
-            if t['n'] >= SUB_MIN_N or t['n'] >= SUB_MIN_SHARE * max(sc_d['n'], 1):
-                subdefs = sub_defs_all.get(t['theme'])
-                if subdefs:
-                    entry['sub'] = subcluster(trs, subdefs)
-                else:
-                    pending_sub.append({'theme': t['theme'], 'dim': d, 'n': t['n'],
-                                        'hint_terms': distinct_terms(trs, theme_kws.get(t['theme'], []))})
+                     'typical': typical, 'sub': None}   # sub 恒 None（二级下钻 2026-07-07 暂禁）
             dim['top_themes'].append(entry)
-        # 重点客户 Top5（维度内）
-        cc = Counter(r['customer'] for r in rc if r['customer'])
-        dim['key_customers'] = []
-        for cname, cn in cc.most_common(5):
-            cthemes = Counter(r['theme'] for r in rc if r['customer'] == cname).most_common(3)
-            dim['key_customers'].append({'customer': cname, 'n': cn,
-                                         'top_themes': [f'{t}({k})' for t, k in cthemes]})
+        # 长尾合并聚合（覆盖集之外的业务主题）
+        rest_ids = {t['theme'] for t in rest}
+        tail_rows = [r for r in rc if r['theme'] in rest_ids]
+        dim['tail'] = {'n': sum(t['n'] for t in rest),
+                       'cust': len({r['customer'] for r in tail_rows if r['customer']}),
+                       'n_themes': len(rest),
+                       'share': round(sum(t['n'] for t in rest) / max(sc_d['n'], 1), 3),
+                       'themes': [{'theme': t['theme'], 'label': labels.get(t['theme'], t['theme']), 'n': t['n']}
+                                  for t in rest[:12]]}
+        dim['coverage'] = round(cov_n / max(sc_d['n'], 1), 3)   # top 主题覆盖本维度工单比例
         out['dimensions'].append(dim)
 
     # 全局重点客户 Top10
@@ -218,7 +218,7 @@ def analyze(wd: Path):
     if x and sc['n'] and x['cur']['n'] / sc['n'] > 0.03:
         out['caveats'].append(f'"其他"维度占比 {x["cur"]["n"]/sc["n"]*100:.1f}% 超过 3% 目标，原因与处置见主题门禁记录。')
 
-    out['pending_subtheme'] = pending_sub
+    out['pending_subtheme'] = []          # 二级下钻 2026-07-07 暂禁
     (wd / 'data' / 'analysis.json').write_text(json.dumps(out, ensure_ascii=False, indent=1), encoding='utf-8')
     # CSV 产物
     with open(wd / 'data' / 'dimension_summary.csv', 'w', newline='', encoding='utf-8-sig') as fh:
@@ -241,17 +241,17 @@ def analyze(wd: Path):
         for c in out['key_customers']:
             w.writerow([c['customer'], c['n'], ' / '.join(c['dims']), ' / '.join(c['top_themes'])])
     write_state(wd, stage='analyzed')
-    if pending_sub:
-        print(f'📐 {len(pending_sub)} 个高量主题待二级下钻（≥100单或≥15%，未定义子主题）：')
-        for p in pending_sub:
-            print(f"    {p['dim']} {p['theme']}（{p['n']}单）区分词: {'、'.join(p['hint_terms'][:8])}")
-        print(f'    → 由 Claude 按提示起草 themes/{project}/sub-themes.yaml 的 labels+sub_themes 后重跑分析')
-    has_sub = sum(1 for dm in out['dimensions'] for t in dm.get('top_themes', []) if t.get('sub'))
-    if has_sub:
-        print(f'📐 已完成 {has_sub} 个主题的二级下钻')
+    # 每维度覆盖率提示: insights 须覆盖 ≥COVER_TARGET, 未达标的维度需 Claude 用长尾合并主题补足
+    print(f'📐 各业务维度 top 主题覆盖率（目标 ≥{COVER_TARGET*100:.0f}%，长尾合并见 tail）:')
+    for dm in out['dimensions']:
+        if dm['dim'] == 'X':
+            continue
+        tail = dm.get('tail', {})
+        print(f"    {dm['name']}: top {len(dm['top_themes'])} 主题覆盖 {dm.get('coverage',0)*100:.0f}%"
+              f" · 长尾合并 {tail.get('n_themes',0)} 主题/{tail.get('n',0)} 单")
     print(f"✓ 分析完成: 总量 {sc['n']:,}(同比{out['overall']['yoy_n']}%) · IPC {sc['ipc']}(同比{out['overall']['yoy_ipc']}%)"
           f" · 维度 {len(out['dimensions'])} 个 → analysis.json + 3 个 CSV")
-    print('→ 下一步: 由 Claude 按 references/insights-template.md 协议撰写 data/insights.md(智能总结), 再生成报告')
+    print('→ 下一步: 由 Claude 按 references/insights-template.md 协议撰写 data/insights.md(智能总结, 每维度≥75%覆盖), 再生成报告')
 
 if __name__ == '__main__':
     ap = argparse.ArgumentParser()

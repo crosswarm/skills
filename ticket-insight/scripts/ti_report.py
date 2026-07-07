@@ -6,7 +6,7 @@
 import argparse, html, json, sys
 from datetime import date
 from pathlib import Path
-from ti_common import clear_active, read_state, stage_at_least, write_state
+from ti_common import clear_active, project_cn, read_state, stage_at_least, write_state
 
 ARROW = lambda v: ('—' if v is None else (f'🔴▲{v}%' if v > 0 else f'🟢▼{abs(v)}%' if v < 0 else '0%'))
 
@@ -48,14 +48,27 @@ def validate_insights(text: str, themes_doc: dict, analysis: dict) -> tuple[list
     for c in analysis.get('key_customers', []):
         valid_nums.add(c.get('n'))
     for d in analysis.get('dimensions', []):
-        for kc in d.get('key_customers', []):
-            valid_nums.add(kc.get('n'))
-        for t in d.get('top_themes', []):          # 二级子主题真实计数
+        valid_nums.add((d.get('tail') or {}).get('n'))   # 长尾合并聚合计数(Agent 合并主题用)
+        for t in d.get('top_themes', []):                # 二级子主题计数(暂禁, sub 恒空; 保留兼容)
             for s in (t.get('sub') or []):
                 valid_nums.add(s.get('n'))
     nums = {int(n.replace(',', '')) for n in re.findall(r'(\d[\d,]*)\s*单', text)}
     unverified = sorted(n for n in nums if n not in valid_nums and n >= 10)
     return unknown, unverified
+
+def coverage_check(insights_text: str, analysis: dict) -> list:
+    """软校验: 各业务维度智能建议覆盖率(段内『占本维度 %』之和)应≥75%; 返回低于阈值的 [(维度名, 覆盖%)]"""
+    import re
+    low = []
+    dim_names = {d['name'] for d in analysis.get('dimensions', []) if d['dim'] != 'X'}
+    for p in re.split(r'\n(?=##\s)', insights_text):
+        m = re.match(r'##\s*(.+?)维度总结', p.strip())
+        if not m or m.group(1) not in dim_names:
+            continue
+        pct = sum(int(x) for x in re.findall(r'占本维度\s*(\d+)\s*%', p))
+        if pct < 75:
+            low.append((m.group(1), pct))
+    return low
 
 def load_insights(wd: Path, force: bool, themes_doc: dict, analysis: dict) -> str:
     p = wd / 'data' / 'insights.md'
@@ -66,6 +79,10 @@ def load_insights(wd: Path, force: bool, themes_doc: dict, analysis: dict) -> st
     unknown, unverified = validate_insights(text, themes_doc, analysis)
     if unverified:
         print(f'⚠️ insights 中 {len(unverified)} 个数字未能在数据中核对到(可能为估算值, 请确认已标注): {unverified[:8]}')
+    low_cov = coverage_check(text, analysis)
+    if low_cov:
+        print('⚠️ 以下业务维度智能建议覆盖率 <75%（请补足主要问题或加一条业务命名的"长尾合并"主题）: '
+              + '、'.join(f'{n}维度 {p}%' for n, p in low_cov))
     if unknown:
         print(f'❌ insights 引用了不存在的主题名: {unknown}')
         if not force:
@@ -108,7 +125,7 @@ def build_md(a, meta):
     x = next((d for d in a['dimensions'] if d['dim'] == 'X'), None)
     top_theme = max((t for d in dims for t in d['top_themes']), key=lambda t: t['n'], default=None)
     worst = max(dims, key=lambda d: (d['yoy_n'] if d['yoy_n'] is not None else -999), default=None)
-    L = [f"# {meta['project']} 工单深度分析报告 · {meta['label']}",
+    L = [f"# {meta['project_cn']}（{meta['project']}）工单深度分析报告 · {meta['label']}",
          '',
          f"> 生成: {date.today()} · 范围: {meta['scope']} · 生成者: ticket-insight skill",
          f"> 同期对比: {', '.join(o['prev_months'][:1])}~{o['prev_months'][-1] if o['prev_months'] else '—'}"
@@ -151,21 +168,26 @@ def build_md(a, meta):
             L.append('**主要问题（主题 Top）+ 动作建议**：')
             for t in d['top_themes']:
                 L.append(f"- **{disp(t)}**（{t['n']} 单 / {t['cust']} 客户 / IPC {t['ipc']}）")
-                for s in (t.get('sub') or []):        # 二级子主题(带代表工单号)
-                    reps = '；代表: ' + '、'.join(f"`{x['key']}`" for x in s.get('reps', [])) if s.get('reps') else ''
-                    L.append(f"  - └ 二级: {s['label']} — {s['n']} 单（占本主题 {s['n']/max(t['n'],1)*100:.0f}%）{reps}")
+                # [二级子主题下钻 2026-07-07 暂禁——保留 t['sub'] 结构待启用]
                 act = theme_actions.get(disp(t), {}).get('action')
                 if act:
                     L.append(f"  - 💡 动作建议: {act}")
                 for tk in t['typical'][:2]:
                     L.append(f"  - 典型: `{tk['key']}` {tk['summary']}（{tk['customer']}）")
-        if d['key_customers']:
-            L += ['', '**重点客户**：',
-                  md_table(['客户', '工单', '主要问题'],
-                           [[c['customer'], c['n'], ' / '.join(c['top_themes'])] for c in d['key_customers']]), '']
+            tail = d.get('tail') or {}
+            if tail.get('n_themes'):
+                L.append(f"- └ 其余 {tail['n_themes']} 个长尾主题合计 {tail['n']} 单"
+                         f"（占本维度 {tail['share']*100:.0f}%，其合并分析见「智能总结与改进建议」章）")
     if x:
         L += [f"### 其他/排除（{x['cur']['n']} 单, 占比 {x['cur']['n']/max(o['cur']['n'],1)*100:.1f}%）",
               '> 含真无效(废弃/无法复现/重复)与无法归类工单；治理目标 ≤3%。', '']
+    # 六、重点客户（独立成章, 不再各维度重复分析）
+    if a.get('key_customers'):
+        L += ['## 六、重点客户 Top10', '',
+              md_table(['客户', '工单数', '维度分布', '主要问题'],
+                       [[c['customer'], c['n'], ' / '.join(c['dims']), ' / '.join(c['top_themes'])]
+                        for c in a['key_customers']]),
+              '', '> 跨维度合并统计；维度分布=该客户工单在四维度的分布，主要问题=其 Top3 主题。', '']
     L += ['## 附、口径说明与数据目录', '']
     L.append(f"- 知识库: {meta.get('kb') or '未连接（纯数据分析）'} · 报告语言: {meta.get('lang', 'zh-CN')}")
     for c in a['caveats']:
@@ -210,6 +232,7 @@ noscript .chart{{display:none}}</style></head><body>
 <h2>智能总结与改进建议</h2>
 <div id="ins" style="background:#f8fafc;border-radius:10px;padding:6px 18px"><pre id="ins_pre" style="white-space:pre-wrap;font-family:inherit">{insights_pre}</pre></div>
 <h2>四维度专项</h2>{dim_sections}
+<h2>重点客户 Top10</h2>{key_customers}
 <h2>风险与口径</h2>{caveats}
 <p class="note">正文不含全量工单列表；原始与加工数据见同目录 <b>data/</b> 文件夹。</p>
 <script>
@@ -267,26 +290,25 @@ def build_html(a, meta):
     theme_actions = parse_theme_actions(meta.get('insights'))
     secs = []
     for d in dims:
-        rows, subtables = [], []
+        rows = []
         for t in d['top_themes']:
             tk = '；'.join(f"{x['key']} {html.escape(x['summary'][:36])}" for x in t['typical'][:2])
             act = html.escape(theme_actions.get(disp(t), {}).get('action', '') or '—')
             rows.append([html.escape(disp(t)), t['n'], t['cust'], t['ipc'], f'💡 {act}' if act != '—' else '—', tk])
-            if t.get('sub'):        # 二级子主题 mini 表(带代表工单号)
-                subtables.append(f'<p style="margin:2px 0 2px 12px;font-size:13px"><b>「{html.escape(disp(t))}」二级主题</b></p>'
-                                 + '<div style="margin-left:12px">' + h_table(['二级主题', '工单', '客户', '占本主题', '代表工单'],
-                                   [[html.escape(s['label']), s['n'], s['cust'], f"{s['n']/max(t['n'],1)*100:.0f}%",
-                                     '、'.join(html.escape(x['key']) for x in s.get('reps', [])) or '—']
-                                    for s in t['sub']]) + '</div>')
-        kc = h_table(['客户', '工单', '主要问题'],
-                     [[html.escape(c['customer']), c['n'], html.escape(' / '.join(c['top_themes']))]
-                      for c in d['key_customers']]) if d['key_customers'] else ''
+            # [二级子主题 mini 表 2026-07-07 暂禁——保留 t['sub'] 结构待启用]
+        tail = d.get('tail') or {}
+        tail_html = (f'<p class="note" style="background:#f8fafc;border-color:#94a3b8">└ 其余 {tail["n_themes"]} 个长尾主题'
+                     f'合计 {tail["n"]} 单（占本维度 {tail["share"]*100:.0f}%，合并分析见「智能总结与改进建议」章）</p>'
+                     if tail.get('n_themes') else '')
         summ = html.escape(dim_summary(d, theme_actions, md=False))
         secs.append(f"<h3>{d['name']}维度（{d['cur']['n']:,} 单 · 同比 {h_arrow(d['yoy_n'])}）</h3>"
                     + f'<p class="note" style="background:#eef4ff;border-color:#2563eb">📌 <b>维度小结</b>：{summ}</p>'
                     + h_table(['主要问题', '工单', '客户', 'IPC', '动作建议', '典型代表'], rows)
-                    + (('<p style="margin-top:8px"><b>🔬 高量主题二级下钻</b></p>' + ''.join(subtables)) if subtables else '')
-                    + (f'<p><b>重点客户</b></p>{kc}' if kc else ''))
+                    + tail_html)
+    kc_section = (h_table(['客户', '工单数', '维度分布', '主要问题'],
+                          [[html.escape(c['customer']), c['n'], html.escape(' / '.join(c['dims'])),
+                            html.escape(' / '.join(c['top_themes']))] for c in a['key_customers']])
+                  if a.get('key_customers') else '<p>无重点客户数据。</p>')
     caveats = ''.join(f'<p class="note">⚠️ {html.escape(c)}</p>' for c in a['caveats']) or '<p>无特别口径警示。</p>'
     data = {'months': [m['month'] for m in a['monthly']],
             'm_cur': [m['n'] for m in a['monthly']], 'm_prev': [m['prev_n'] for m in a['monthly']],
@@ -297,11 +319,11 @@ def build_html(a, meta):
             't_names': [t['theme'] for t in all_tops], 't_counts': [t['n'] for t in all_tops]}
     ins = meta.get('insights') or INSIGHTS_PLACEHOLDER
     data['insights_md'] = ins
-    return HTML_TPL.format(title=f"{meta['project']} 工单深度分析 · {meta['label']}",
+    return HTML_TPL.format(title=f"{meta['project_cn']}（{meta['project']}）工单深度分析 · {meta['label']}",
                            today=date.today(), scope=html.escape(meta['scope']), cards=cards,
                            trend_table=trend_table, dim_table=dim_table, theme_table=theme_table,
                            insights_pre=html.escape(ins),
-                           dim_sections=''.join(secs), caveats=caveats,
+                           dim_sections=''.join(secs), key_customers=kc_section, caveats=caveats,
                            data_json=json.dumps(data, ensure_ascii=False))
 
 if __name__ == '__main__':
@@ -325,7 +347,8 @@ if __name__ == '__main__':
     scope = f'{a.project} · {a.label}' + (f' · {a.domain}' + (f'/{a.sub}' if a.sub else '') if a.domain else '')
     kb_files = st.get('kb_files') or []
     theme2dim = {t['theme']: t['dim'] for t in themes_doc.get('themes', [])}
-    meta = {'project': a.project, 'label': a.label, 'scope': scope, 'lang': a.lang,
+    proj_cn = project_cn(a.project, st.get('project_name'))   # 报告大标题中文名（兜底内建表）
+    meta = {'project': a.project, 'project_cn': proj_cn, 'label': a.label, 'scope': scope, 'lang': a.lang,
             'insights': insights, 'kb': ('、'.join(kb_files) if kb_files else None),
             'theme2dim': theme2dim}
     (wd / 'report.md').write_text(build_md(analysis, meta), encoding='utf-8')
